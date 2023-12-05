@@ -1,3 +1,5 @@
-{lib, pkgs, ...}: {
-    imports = [ ./modules/bpmp-virt-host ];
+# Copyright 2022-2023 TII (SSRC) and the Ghaf contributors
+# SPDX-License-Identifier: Apache-2.0
+{...}: {
+  imports = [./modules/bpmp-virt-host];
 }
