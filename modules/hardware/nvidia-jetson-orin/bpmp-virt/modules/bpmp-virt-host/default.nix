@@ -33,14 +33,26 @@
     dtc
   ];
 
-  systemd.services.bindUARTA = {
+  systemd.services.enableVfioPlatform = {
     description = "Bind UARTA to the vfio-platform driver";
-    wantedBy = ["multi-user.target"];
+    wantedBy = ["bindSerial3100000.service"];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = "yes";
       ExecStart = ''
         ${pkgs.bash}/bin/bash -c "echo vfio-platform > /sys/bus/platform/devices/3100000.serial/driver_override"
+      '';
+    };
+  };
+
+  systemd.services.bindSerial3100000 = {
+    description = "Bind UARTA to the vfio-platform driver";
+    wantedBy = ["multi-user.target"];
+    after = ["enableVfioPlatform.service"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = "yes";
+      ExecStart = ''
         ${pkgs.bash}/bin/bash -c "echo 3100000.serial > /sys/bus/platform/drivers/vfio-platform/bind"
       '';
     };
