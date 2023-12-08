@@ -13,6 +13,6 @@
     ./nx-netvm-ethernet-pci-passthrough.nix
 
     ./ota-utils-fix.nix
-    ./bpmp-virt
+    ./virtualization
   ];
 }
