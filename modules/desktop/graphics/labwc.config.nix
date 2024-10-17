@@ -11,29 +11,7 @@ let
 
   audio-ctrl = pkgs.callPackage ../../../packages/audio-ctrl { };
   ghaf-screenshot = pkgs.callPackage ../../../packages/ghaf-screenshot { };
-  gtklockStyle = pkgs.writeText "gtklock.css" ''
-    window {
-      background: rgba(18, 18, 18, 1);
-      color: #fff;
-    }
-    button {
-      box-shadow: none;
-      border-radius: 5px;
-      border: none;
-      background: #171717;
-    }
-    entry {
-      background-color: #232323;
-      border: 1px solid rgba(46, 46, 46, 1);
-      color: #fff;
-    }
-    entry:focus {
-      box-shadow: none;
-      border: 1px solid rgba(223, 92, 55, 1);
-    }
-  '';
-  lockCmd = "${pkgs.gtklock}/bin/gtklock -s ${gtklockStyle}";
-
+  ghaf-session-ctrl = pkgs.callPackage ../../../packages/ghaf-session-ctrl { };
   ghaf-launcher = pkgs.callPackage ./ghaf-launcher.nix { inherit config pkgs; };
   autostart = pkgs.writeShellApplication {
     name = "labwc-autostart";
@@ -89,7 +67,7 @@ let
     <keyboard>
       <default />
       <keybind key="W-l">
-        <action name="Execute" command="${lockCmd}" />
+        <action name="Execute" command="${ghaf-session-ctrl}/bin/ghaf-session-ctrl lock" />
       </keybind>
       ${lib.optionalString config.ghaf.profiles.debug.enable ''
         <keybind key="Print">
@@ -267,7 +245,7 @@ in
         description = "Lock Event Handler";
         serviceConfig = {
           Type = "simple";
-          ExecStart = "${pkgs.swayidle}/bin/swayidle lock \"${lockCmd}\"";
+          ExecStart = "${pkgs.swayidle}/bin/swayidle lock \"${ghaf-session-ctrl}/bin/ghaf-session-ctrl lock\"";
         };
         partOf = [ "ghaf-session.target" ];
         wantedBy = [ "ghaf-session.target" ];
@@ -280,27 +258,12 @@ in
           Type = "simple";
           ExecStart = ''
             ${pkgs.swayidle}/bin/swayidle -w timeout ${builtins.toString cfg.autolock.duration} \
-            '${pkgs.chayang}/bin/chayang && ${lockCmd}'
+            '${pkgs.chayang}/bin/chayang && ${ghaf-session-ctrl}/bin/ghaf-session-ctrl lock'
           '';
         };
         partOf = [ "ghaf-session.target" ];
         wantedBy = [ "ghaf-session.target" ];
       };
     };
-
-    ghaf.graphics.launchers = [
-      {
-        name = "Lock";
-        description = "Lock Session";
-        path = "${lockCmd}";
-        icon = "${pkgs.icon-pack}/system-lock-screen.svg";
-      }
-      {
-        name = "Log Out";
-        description = "Quit Applications & Log Out";
-        path = "${pkgs.labwc}/bin/labwc --exit";
-        icon = "${pkgs.icon-pack}/system-log-out.svg";
-      }
-    ];
   };
 }

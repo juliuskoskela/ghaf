@@ -12,6 +12,7 @@ let
 
   cfg = config.ghaf.graphics.labwc;
   audio-ctrl = pkgs.callPackage ../../../packages/audio-ctrl { };
+  ghaf-session-ctrl = pkgs.callPackage ../../../packages/ghaf-session-ctrl { };
 
   launcher-icon = "${pkgs.ghaf-artwork}/icons/launcher.svg";
 
@@ -40,6 +41,12 @@ let
   power-icon = "${pkgs.ghaf-artwork}/icons/power.svg";
   restart-icon = "${pkgs.ghaf-artwork}/icons/restart.svg";
   suspend-icon = "${pkgs.ghaf-artwork}/icons/suspend.svg";
+
+  settings-icon = "${pkgs.ghaf-artwork}/icons/admin-cog.svg";
+
+  lock-icon = "${pkgs.ghaf-artwork}/icons/lock.svg";
+
+  logout-icon = "${pkgs.ghaf-artwork}/icons/logout.svg";
 
   arrow-right-icon = "${pkgs.ghaf-artwork}/icons/arrow-right.svg";
 
@@ -516,23 +523,26 @@ in
                         :onchange "${eww-brightness}/bin/eww-brightness set_screen {} &")))
 
         ;; Generic Widget Buttons For Quick Settings ;;
-        (defwidget widget_button [icon ?title header ?subtitle ?onclick ?font-icon] 
-            (eventbox :class "qs-info-button" :onclick onclick
+        (defwidget widget_button [icon ?title ?header ?subtitle ?onclick ?font-icon ?class] 
+            (eventbox :class { class == "" ? "widget-button" : "''${class}" }
+                :onclick onclick
                 (box :orientation "v"
-                    :class "qs-info-button-padding"
-                    :spacing 10
-                    :valign "center"
+                    :class "inner-box"
+                    :spacing 6
                     :space-evenly false
-                    (label :class "title" 
-                        :visible { title != "" && title != "null" ? "true" : "false" } 
-                        :text title
+                    (label :class "header" 
+                        :visible { header != "" && header != "null" ? "true" : "false" } 
+                        :text header
                         :hexpand true
-                        :vexpand false
-                        :halign "start")
+                        :vexpand true
+                        :halign "start"
+                        :valign "fill")
                     (box :orientation "h"
                         :spacing 10
-                        :valign "center"
-                        :vexpand "false"
+                        :valign "fill"
+                        :halign "start"
+                        :hexpand true
+                        :vexpand true
                         :space-evenly false
                         (box :class "icon"
                             :visible {font-icon == "" ? "true" : "false"}
@@ -547,26 +557,8 @@ in
                             :spacing 3
                             :halign "start"
                             :hexpand true
-                            (label :halign "start" :class "header" :text header)
+                            (label :halign "start" :class "title" :text title)
                             (label :visible {subtitle != "" ? "true" : "false"} :halign "start" :class "subtitle" :text subtitle :limit-width 13))))))
-
-        (defwidget widget_button_small [icon ?onclick ?header] 
-            (eventbox :class "qs-info-button-small"
-                :onclick onclick
-                (box :orientation "h"
-                    :space-evenly false
-                    (box :class "icon"
-                        :valign "center"
-                        :halign "start"
-                        :hexpand false
-                        :style "background-image: url(\"''${icon}\")")
-                    (box :class "text"
-                        :valign "center"
-                        :orientation "v" 
-                        :spacing 3
-                        :halign "start"
-                        :hexpand true
-                        (label :halign "start" :class "header" :text header :visible {header != "" ? "true" : "false"})))))
 
         ;; Power Menu Buttons ;;
         (defwidget power_menu []
@@ -578,17 +570,30 @@ in
             :spacing 10
             :space-evenly "false"
             (widget_button
+                    :class "power-menu-button"
                     :icon "${power-icon}"
-                    :header "Shutdown"
+                    :title "Shutdown"
                     :onclick "${eww-popup}/bin/eww-popup power-menu & ${eww-power}/bin/eww-power poweroff &")
             (widget_button
+                    :class "power-menu-button"
                     :icon "${suspend-icon}"
-                    :header "Suspend"
+                    :title "Suspend"
                     :onclick "${eww-popup}/bin/eww-popup power-menu & ${eww-power}/bin/eww-power suspend &")
             (widget_button
+                    :class "power-menu-button"
                     :icon "${restart-icon}"
-                    :header "Reboot"
-                    :onclick "${eww-popup}/bin/eww-popup power-menu & ${eww-power}/bin/eww-power reboot &")))
+                    :title "Reboot"
+                    :onclick "${eww-popup}/bin/eww-popup power-menu & ${eww-power}/bin/eww-power reboot &")
+            (widget_button
+                    :class "power-menu-button"
+                    :icon "${logout-icon}"
+                    :title "Log Out"
+                    :onclick "${eww-popup}/bin/eww-popup power-menu & ${ghaf-session-ctrl}/bin/ghaf-session-ctrl logout &")
+            (widget_button
+                    :class "power-menu-button"
+                    :icon "${lock-icon}"
+                    :title "Lock"
+                    :onclick "${eww-popup}/bin/eww-popup power-menu & ${ghaf-session-ctrl}/bin/ghaf-session-ctrl lock &")))
 
         ;; Quick Settings Buttons ;;
         (defwidget settings_buttons []
@@ -600,7 +605,7 @@ in
                     (widget_button
                         :icon "${bluetooth-1-icon}"
                         :header "Bluetooth"
-                        :onclick "${eww-popup}/bin/eww-popup quick-settings; ${pkgs.bt-launcher}/bin/bt-launcher &")
+                        :onclick "${eww-popup}/bin/eww-popup quick-settings & ${pkgs.bt-launcher}/bin/bt-launcher &")
                     (box
                         :hexpand true
                         :vexpand true
@@ -613,20 +618,18 @@ in
                 :spacing 10
                 (widget_button
                     :visible { EWW_BATTERY != "" ? "true" : "false" }
-                    :hexpand true
-                    :vexpand true
+                    :header "Battery"
+                    :title {EWW_BATTERY != "" ? "''${battery.capacity}%" : "100%"}
                     :subtitle { battery.status == 'Charging' ? "Charging" : 
                                 battery.hours != "0" && battery.minutes != "0" ? "''${battery.hours}h ''${battery.minutes}m" : 
                                 battery.hours == "0" && battery.minutes != "0" ? "''${battery.minutes}m" :
                                 battery.hours != "0" && battery.minutes == "0" ? "''${battery.hours}h" : 
                                 "" }
-                    :header {EWW_BATTERY != "" ? "''${battery.capacity}%" : "100%"}
                     :icon {battery.icon})
-                (box
-                    :hexpand true
-                    :vexpand true
-                    :class "spacer"
-                )))
+                (widget_button
+                    :icon "${settings-icon}"
+                    :header "Settings"
+                    :onclick "${eww-popup}/bin/eww-popup quick-settings & ${pkgs.ctrl-panel}/bin/ctrl-panel >/dev/null &")))
 
         ;; Quick Settings Widget ;;
         (defwidget quick-settings-widget []
@@ -861,13 +864,12 @@ in
     # Main eww bar styling
     environment.etc."eww/eww.scss" = {
       text = ''
-        * { all: unset; }
-
         $bg-primary: #121212;
         $widget-bg: #1A1A1A;
         $widget-hover: #282828;
         $bg-secondary: #2B2B2B;
         $text-base: #FFFFFF;
+        $text-disabled: #bfbfbf;
         $text-success: #5AC379;
         $icon-subdued: #3D3D3D;
         $stroke-success: #5AC379;
@@ -893,8 +895,10 @@ in
             @include widget($padding: 14px, $radius: 6px, $bg: $bg-primary);
         }
 
-        @mixin floating_widget($margin: 0.3em 0.3em 0em 0em, $padding: 14px, $radius: 6px){
-            @include unset($rec: true);
+        @mixin floating_widget($margin: 0.3em 0.3em 0em 0em, $padding: 14px, $radius: 6px, $unset: true) {
+            @if $unset == true {
+              @include unset($rec: true);
+            }
             border-radius: $radius;
             margin: $margin;
 
@@ -915,7 +919,7 @@ in
         }
 
         @mixin icon-button($bg: transparent, $hover-bg: $widget-hover) {
-            @include unset($rec: true);
+            @include unset;
             @include icon;
 
             border-radius: 0.25em;
@@ -1008,7 +1012,7 @@ in
             .slider{ @include slider; }
 
             .header {
-                font-size: 0.8em;
+                font-size: 0.9em;
                 font-weight: 500;
                 font-family: Inter;
             }
@@ -1024,28 +1028,6 @@ in
             }
         }
 
-        @mixin widget-button() {
-            @include unset($rec: true);
-
-            border-radius: 50%;
-            padding: 0.2em;
-            background-color: transparent;
-            background-repeat: no-repeat;
-            background-position: center;
-            min-height: 24px;
-            min-width: 24px;
-
-            &:hover {
-                transition: 200ms linear background-color;
-                background-color: $widget-hover;
-            }
-
-            &:disabled {
-                background-color: transparentize($widget-hover, 0.4);
-                background-image: none;
-            }
-        }
-
         @mixin qs-widget($min-height: 70px, $min-width: 150px, $radius: 0.75em, $bg: $widget-bg) {
             min-height: $min-height;
             min-width: $min-width;
@@ -1053,18 +1035,13 @@ in
             background-color: $bg;
         }
 
-        @mixin qs-info-button($min-width: 145px, $radius: 0.75em, $bg: $widget-bg, $padding: 1em, $icon-padding: 0.3em) {
-            @include unset($rec: true);
-            @include qs-widget ();
+        @mixin widget-button($min-width: 133px, $min-height: 58px, $radius: 0.75em, $bg: $widget-bg, $padding: 0.8em, $icon-padding: 0) {
+            @include qs-widget($min-width: $min-width, $min-height: $min-height);
 
-            .qs-info-button-padding {
+            .inner-box {
                 padding: $padding;
-            }
-
-            .title {
-                font-size: 0.8em;
-                font-weight: 500;
-                font-family: Inter;
+                min-width: $min-width;
+                min-height: $min-height;
             }
 
             &:hover {
@@ -1092,12 +1069,18 @@ in
                 
                 .header {
                     font-weight: 600;
+                    font-size: 1em;
+                }
+
+                .title {
                     font-size: 0.9em;
+                    font-weight: 500;
+                    font-family: Inter;
                 }
 
                 .subtitle {
                     font-weight: 400;
-                    font-size: 0.7em;
+                    font-size: 0.8em;
                     min-height: 0px;
                 }
             }
@@ -1123,13 +1106,9 @@ in
             .slider{ @include slider($slider-width: 150px, $thumb: false, $slider-height: 5px); }
         }
 
-        .widget-button { @include widget-button; }
+        .widget-button {@include widget-button; }
 
-        .qs-info-button {@include qs-info-button; }
-
-        .qs-info-button-small {
-            @include qs-info-button($min-width: 75px, $padding: 0.3em, $icon-padding: 0.1em);
-        }
+        .power-menu-button {@include widget-button($min-height: 33px); }
 
         .eww_bar {
             background-color: $bg-primary;
@@ -1222,22 +1201,50 @@ in
         }
 
         .tray menu {
-            padding: 5px 5px;
+            @include floating_widget($margin: 0, $unset: false);
+            font-family: Inter;
+            font-size: 1.1em;
             background-color: $bg-primary;
 
             >menuitem {
-                font-size: 18px;
-                padding: 2px 5px;
-                color: white;
+                font-size: 1em;
+                padding: 5px 7px;
+                color: $text-base;
 
                 &:hover {
                     background-color: $widget-hover;
                 }
+
+                &:disabled {
+                    color: $text-disabled;
+                }
+
+                >check {
+                  border-width: 1px;
+                  border-color: transparent;
+                  color: transparent;
+
+                  &:checked {
+                    border-color: $text-base;
+                    color: $text-base;
+                  }
+                }
+
+                accelerator {
+                    color: red;
+                }
+            }
+
+            >arrow {
+                background-color: transparent;
+                color: $text-base;
             }
 
             separator {
-                background-color: white;
+                background-color: $icon-subdued;
                 padding-top: 1px;
+                padding-bottom: 1px;
+                border-radius: 10px;
 
                 &:last-child {
                     padding: unset;
