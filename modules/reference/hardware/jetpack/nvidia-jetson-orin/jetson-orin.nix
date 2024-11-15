@@ -63,7 +63,7 @@ in
           # The patch reverts back to old behavior, which is to always reset
           # the display when exiting UEFI, instead of doing handoff, when
           # means not to reset anything.
-          ./edk2-nvidia-always-reset-display.patch
+          #./edk2-nvidia-always-reset-display.patch
         ];
       };
     };
@@ -117,7 +117,9 @@ in
         name = lib.mkDefault "tegra234-p3701-0000-p3737-0000.dtb";
       }
       // lib.optionalAttrs (cfg.somType == "nx") {
-        name = lib.mkDefault "tegra234-p3767-0000-p3509-a02.dtb";
+        # TODO: Double check if "tegra234-p3767-0000-p3509-a02.dtb" was 35.4 device tree
+        # name = lib.mkDefault "tegra234-p3767-0000-p3509-a02.dtb";
+        name = lib.mkDefault "tegra234-p3737-0000+p3701-0000.dtb";
       };
   };
 }

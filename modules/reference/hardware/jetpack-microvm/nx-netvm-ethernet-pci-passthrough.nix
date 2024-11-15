@@ -8,7 +8,8 @@ in
   options.ghaf.hardware.nvidia.orin.nx.enableNetvmEthernetPCIPassthrough = lib.mkEnableOption "Ethernet card PCI passthrough to NetVM";
   config = lib.mkIf cfg.enableNetvmEthernetPCIPassthrough {
     # Orin NX Ethernet card PCI Passthrough
-    ghaf.hardware.nvidia.orin.enablePCIPassthroughCommon = true;
+    # TODO: Re-enable
+    ghaf.hardware.nvidia.orin.enablePCIPassthroughCommon = false;
 
     ghaf.virtualization.microvm.netvm.extraModules = [
       {
@@ -26,12 +27,13 @@ in
     ];
 
     boot.kernelPatches = [
-      {
-        name = "nx-pci-passthrough-patch";
-        # This patch uses Alex Williamson's patch for enabling overrides for missing ACS capabilities on pci
-        # bus which could be accessed from following link: https://lkml.org/lkml/2013/5/30/513
-        patch = ./pci-passthrough-nx-test.patch;
-      }
+      # TODO re-enable
+      # {
+      #   name = "nx-pci-passthrough-patch";
+      #   # This patch uses Alex Williamson's patch for enabling overrides for missing ACS capabilities on pci
+      #   # bus which could be accessed from following link: https://lkml.org/lkml/2013/5/30/513
+      #   patch = ./pci-passthrough-nx-test.patch;
+      # }
     ];
 
     boot.kernelParams = [
@@ -41,7 +43,7 @@ in
 
     hardware.deviceTree = {
       enable = true;
-      name = "tegra234-p3767-host-passthrough.dtb";
+      name = "tegra234-p3737-0000+p3701-0000.dtb";
     };
   };
 }

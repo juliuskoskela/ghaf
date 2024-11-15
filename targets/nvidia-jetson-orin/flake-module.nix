@@ -66,7 +66,7 @@ let
               };
 
               hardware.nvidia = {
-                virtualization.enable = true;
+                virtualization.enable = false;
                 virtualization.host.bpmp.enable = false;
                 passthroughs.host.uarta.enable = false;
                 passthroughs.uarti_net_vm.enable = som == "agx";
