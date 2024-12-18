@@ -155,27 +155,15 @@ let
   # Add nodemoapps targets
   targets = baseTargets ++ (map generate-nodemoapps baseTargets);
   crossTargets = map generate-cross-from-x86_64 targets;
-  mkFlashScript = import ../../lib/mk-flash-script;
+  mkFlashScript = import ./flash-script.nix;
   # Generate flash script variant which flashes both QSPI and eMMC
-  generate-flash-script =
-    tgt: flash-tools-system:
-    mkFlashScript {
-      inherit nixpkgs;
-      inherit (tgt) hostConfiguration;
-      inherit jetpack-nixos;
-      inherit flash-tools-system;
-    };
+  generate-flash-script = tgt: _flash-tools-system: mkFlashScript tgt.hostConfiguration;
   # Generate flash script variant which flashes QSPI only. Useful for Orin NX
   # and non-eMMC based development.
   generate-flash-qspi =
-    tgt: flash-tools-system:
-    mkFlashScript {
-      inherit nixpkgs;
-      hostConfiguration = tgt.hostConfiguration.extendModules {
-        modules = [ { ghaf.hardware.nvidia.orin.flashScriptOverrides.onlyQSPI = true; } ];
-      };
-      inherit jetpack-nixos;
-      inherit flash-tools-system;
+    tgt: _flash-tools-system:
+    mkFlashScript tgt.hostConfiguration.extendModules {
+      modules = [ { ghaf.hardware.nvidia.orin.flashScriptOverrides.onlyQSPI = true; } ];
     };
 in
 {
