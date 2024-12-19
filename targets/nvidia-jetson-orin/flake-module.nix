@@ -162,9 +162,9 @@ let
   # and non-eMMC based development.
   generate-flash-qspi =
     tgt: _flash-tools-system:
-    mkFlashScript tgt.hostConfiguration.extendModules {
+    mkFlashScript (tgt.hostConfiguration.extendModules {
       modules = [ { ghaf.hardware.nvidia.orin.flashScriptOverrides.onlyQSPI = true; } ];
-    };
+    });
 in
 {
   flake = {
