@@ -17,7 +17,7 @@
 / {
     overlay-name = "BPMP host proxy 2";
     compatible = "nvidia,tegra234";
-    
+
     fragment@0 {
         target-path = "/";
         __overlay__ {
@@ -161,7 +161,7 @@
         };
     };
 
-    // Disable the host1x to use a new host1x created later: host1x_pt@13e00000 
+    // Disable the host1x to use a new host1x created later: host1x_pt@13e00000
     fragment@5 {
         target-path = "/bus@0";
         __overlay__ {
@@ -186,7 +186,7 @@
             };
         };
     };
-    
+
     // Created new device nodes from zero because we want to remove some properties
     // from the original, and the device tree does not allow to remove properties
     // from a node.
@@ -230,7 +230,7 @@
 
                 status = "okay";
             };
-		
+
 		vic@15340000 {
 			compatible = "nvidia,dummy";
 			reg = <0x0 0x15340000 0x0 0x00040000>;
@@ -289,11 +289,11 @@
     // [  522.733235] CPU:0, Error:cbb-fabric, Errmon:2
     // [  522.740681] 	  Error Code		: PWRDOWN_ERR
     // [  522.747687] 	  Overflow		: Multiple PWRDOWN_ERR
-    // [  522.755374] 
+    // [  522.755374]
     // [  522.759874] 	  Error Code		: PWRDOWN_ERR
     // [  522.766961] 	  MASTER_ID		: CCPLEX
     // [  522.773513] 	  Address		: 0x351804c
-    // [  522.780172] 	  Cache			: 0x1 -- Bufferable 
+    // [  522.780172] 	  Cache			: 0x1 -- Bufferable
     // [  522.787537] 	  Protection		: 0x2 -- Unprivileged, Non-Secure, Data Access
     // [  522.797600] 	  Access_Type		: Read
     // [  522.803996] 	  Access_ID		: 0x11

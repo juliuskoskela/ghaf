@@ -15,7 +15,7 @@ index a85c199c76..76b2f0acb9 100644
 @@ -364,6 +364,14 @@ static int vfio_set_resample_eventfd(VFIOINTp *intp)
      return 0;
  }
- 
+
 +struct IRQState_t {
 +    Object parent_obj;
 +
@@ -28,7 +28,7 @@ index a85c199c76..76b2f0acb9 100644
   * vfio_start_irqfd_injection - starts the virtual IRQ injection using
   * irqfd
 @@ -385,6 +393,12 @@ static void vfio_start_irqfd_injection(SysBusDevice *sbdev, qemu_irq irq)
- 
+
      QLIST_FOREACH(intp, &vdev->intp_list, next) {
          if (intp->qemuirq == irq) {
 +            // Print the virtual IRQ assgined to each device
@@ -40,5 +40,5 @@ index a85c199c76..76b2f0acb9 100644
              break;
          }
      }
--- 
+--
 2.34.1

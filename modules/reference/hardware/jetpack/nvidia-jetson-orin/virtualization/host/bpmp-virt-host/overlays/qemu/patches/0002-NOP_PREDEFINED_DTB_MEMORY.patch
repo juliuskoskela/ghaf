@@ -13,9 +13,9 @@ index 5301d8d318..4806fc73cd 100644
 --- a/hw/arm/boot.c
 +++ b/hw/arm/boot.c
 @@ -41,6 +41,10 @@
- 
+
  #define BOOTLOADER_MAX_SIZE         (4 * KiB)
- 
+
 +/* Put in zero if you do not want that Qemu removes the
 + * memory configuraiton on the device tree */
 +#define NOP_PREDEFINED_DTB_MEMORY      0
@@ -33,5 +33,5 @@ index 5301d8d318..4806fc73cd 100644
              qemu_fdt_nop_node(fdt, node_path[n]);
          }
          n++;
--- 
+--
 2.34.1

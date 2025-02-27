@@ -30,7 +30,7 @@ index fe3ad97..ea9234e 100644
 +//#define NVGPU_DEFAULT_DBG_MASK		0xFFFFFFFB      // Remove register access nvgpu_writel:43
 +//#define NVGPU_DEFAULT_DBG_MASK        0x00400080         // Only Memory mappings, DMA allocation prints
  #define NVGPU_DEFAULT_DBG_MASK		U64(0)
- 
+
  #define	gpu_dbg_info		BIT(0)	/* Lightly verbose info. */
 diff --git a/nvgpu/drivers/gpu/nvgpu/os/linux/driver_common.c b/nvgpu/drivers/gpu/nvgpu/os/linux/driver_common.c
 index b0ae8c8..463f4f7 100644
@@ -39,7 +39,7 @@ index b0ae8c8..463f4f7 100644
 @@ -47,6 +47,8 @@
  #include "scale.h"
  #include "driver_common.h"
- 
+
 +#include <linux/nvmap_exports.h>
 +
  #define EMC3D_DEFAULT_RATIO 750
@@ -48,7 +48,7 @@ index b0ae8c8..463f4f7 100644
 @@ -450,6 +452,15 @@ int nvgpu_probe(struct gk20a *g,
  	struct device_node *np = dev->of_node;
  	bool disable_l3_alloc = false;
- 
+
 +	// TODO: address from DTB
 +	nvgpu_info(g, "nvmap_dma_declare_coherent_memory(dev, 0x80000000, 0x80000000, 0x08000000, 0, 0, 0);");
 +	err = nvmap_dma_declare_coherent_memory(dev, 0x80000000, 0x80000000, 0x08000000, 0, 0, 0);
@@ -67,14 +67,14 @@ index bf9e930..1a827dd 100644
 +++ b/nvgpu/drivers/gpu/nvgpu/os/linux/fuse.c
 @@ -12,6 +12,7 @@
   */
- 
+
  #include <nvgpu/fuse.h>
 +#include <nvgpu/log.h>
- 
+
  #include <nvgpu/linux/soc_fuse.h>
  #include <nvgpu/linux/nvmem.h>
 @@ -45,7 +46,10 @@ int nvgpu_tegra_fuse_read_gcplex_config_fuse(struct gk20a *g, u32 *val)
- 
+
  int nvgpu_tegra_fuse_read_opt_gpc_disable(struct gk20a *g, u32 *val)
  {
 -	return tegra_fuse_readl(FUSE_OPT_GPC_DISABLE_0, val);
@@ -83,7 +83,7 @@ index bf9e930..1a827dd 100644
 +	nvgpu_info(g, "WARNING: %s hardcode returning 0", __func__);
 +	return 0;
  }
- 
+
  int nvgpu_tegra_fuse_read_opt_emc_disable(struct gk20a *g, u32 *val)
 diff --git a/nvgpu/drivers/gpu/nvgpu/os/linux/linux-dma.c b/nvgpu/drivers/gpu/nvgpu/os/linux/linux-dma.c
 index 28fb389..321d807 100644
@@ -102,14 +102,14 @@ index 28fb389..321d807 100644
  	void *alloc_ret;
  	int err;
 +	flags = NVGPU_DMA_PHYSICALLY_ADDRESSED;
- 
+
  	if (nvgpu_mem_is_valid(mem)) {
  		nvgpu_warn(g, "memory leak !!");
 @@ -318,6 +320,18 @@ int nvgpu_dma_alloc_flags_sys(struct gk20a *g, unsigned long flags,
  	mem->aligned_size = size;
  	mem->aperture = APERTURE_SYSMEM;
  	mem->priv.flags = flags;
-+	
++
 +	nvgpu_log_info(g, " ");
 +	nvgpu_log_info(g, "mem->mem_flags:    0x%08lX", mem->mem_flags);
 +	nvgpu_log_info(g, "mem->priv.flags:   0x%08lX", mem->priv.flags);
@@ -121,9 +121,9 @@ index 28fb389..321d807 100644
 +	nvgpu_log_info(g, "mem->size:         0x%08lX, size: 0x%08lX", mem->size, size);
 +	nvgpu_log_info(g, "PAGE_SIZE:         0x%08lX", PAGE_SIZE);
 +	nvgpu_log_info(g, "iova:              0x%08llX", iova);
- 
+
  	dma_dbg_alloc_done(g, mem->size, "sysmem");
- 
+
 diff --git a/nvgpu/drivers/gpu/nvgpu/os/linux/nvgpu_mem.c b/nvgpu/drivers/gpu/nvgpu/os/linux/nvgpu_mem.c
 index 9081c1f..22ac583 100644
 --- a/nvgpu/drivers/gpu/nvgpu/os/linux/nvgpu_mem.c
@@ -131,16 +131,16 @@ index 9081c1f..22ac583 100644
 @@ -42,17 +42,39 @@
  #define DMA_ERROR_CODE DMA_MAPPING_ERROR
  #endif
- 
+
 +/**
 + *     A CMA region is passed through from the host to the VM.
-+ *     By default the CMA_PT (CMA passthrough) region in the host starts 
-+ *     in 0x80000000 physical address (PA) and this is mapped in the 
++ *     By default the CMA_PT (CMA passthrough) region in the host starts
++ *     in 0x80000000 physical address (PA) and this is mapped in the
 + *     CMA_VM at 0x4000000, then the offset is:
 + *        Offset = CMA_PT - CMA_VM
 + *        Offset = 0x80000000 - 0x40000000
 + *        Offset = 0x40000000
-+ * 
++ *
 + */
 +//#define CMA_OFFSET_TO_HOST_PA            ( 0x80000000 -  0x80000000)
 +//#define CMA_VRAM_OFFSET_TO_HOST_PA       (0x100000000 - 0x100000000)
@@ -161,7 +161,7 @@ index 9081c1f..22ac583 100644
  	struct device *dev = dev_from_gk20a(g);
  	struct gk20a_platform *platform = gk20a_get_platform(dev);
  	u64 ipa = sg_phys((struct scatterlist *)sgl);
- 
+
 +	if(ipa < 0x100000000)
 +		ipa += CMA_OFFSET_TO_HOST_PA;
 +	else
@@ -169,6 +169,6 @@ index 9081c1f..22ac583 100644
 +
  	if (platform->phys_addr)
  		return platform->phys_addr(g, ipa, NULL);
- 
--- 
+
+--
 2.34.1
