@@ -100,7 +100,7 @@ index 1b25e73578..07646462a1 100644
      select ACPI_CXL
      select ACPI_HMAT
 +    select NVIDIA_BPMP_GUEST
- 
+
  config CUBIEBOARD
      bool
 diff --git a/hw/arm/virt.c b/hw/arm/virt.c
@@ -113,7 +113,7 @@ index 1a381e9a2b..f26ac71305 100644
  #include "hw/char/pl011.h"
 +#include "hw/misc/nvidia_bpmp_guest.h"
  #include "qemu/guest-random.h"
- 
+
  static GlobalProperty arm_virt_compat[] = {
 @@ -181,6 +182,7 @@ static const MemMapEntry base_memmap[] = {
      [VIRT_NVDIMM_ACPI] =        { 0x09090000, NVDIMM_ACPI_IO_LEN},
@@ -126,7 +126,7 @@ index 1a381e9a2b..f26ac71305 100644
 @@ -1122,6 +1124,9 @@ static void create_virtio_devices(const VirtMachineState *vms)
      hwaddr size = vms->memmap[VIRT_MMIO].size;
      MachineState *ms = MACHINE(vms);
- 
+
 +    /* Create NVIDIA BPMP guest passthru device, possibly need update ftd - WIP */
 +    nvidia_bpmp_guest_create(vms->memmap[VIRT_NVIDIA_BPMP_GUEST].base);
 +
@@ -140,7 +140,7 @@ index 1f1baa5dde..8b05d8e4c6 100644
 @@ -11,6 +11,9 @@ config ARMSSE_MHU
  config ARMSSE_CPU_PWRCTRL
      bool
- 
+
 +config NVIDIA_BPMP_GUEST
 +    bool
 +
@@ -361,5 +361,5 @@ index aca4f8061b..5ded5b0c07 100644
      VIRT_PLATFORM_BUS,
      VIRT_GPIO,
      VIRT_UART1,
--- 
+--
 2.34.1

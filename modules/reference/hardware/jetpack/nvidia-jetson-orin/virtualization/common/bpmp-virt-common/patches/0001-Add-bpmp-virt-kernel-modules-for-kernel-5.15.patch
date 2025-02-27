@@ -31,7 +31,7 @@ index 1c8ba1f47c7c..fcf03cf3fd44 100644
 +++ b/drivers/firmware/tegra/Kconfig
 @@ -24,3 +24,6 @@ config TEGRA_BPMP
  	  firmware running on BPMP.
- 
+
  endmenu
 +
 +source "drivers/firmware/tegra/bpmp-host-proxy/Kconfig"
@@ -59,7 +59,7 @@ index 000000000000..33877730ad5b
 +	The Tegra BPMP guest proxy driver, virtualize the BPMP transfer
 +	function, allowing the guest to have access to the host BPMP.
 +
-+	Say Y here to enable this driver and to compile this driver as a module, 
++	Say Y here to enable this driver and to compile this driver as a module,
 +	choose M here. If unsure, say N
 +
 +
@@ -77,11 +77,11 @@ index 000000000000..51012d8001a1
 +++ b/drivers/firmware/tegra/bpmp-guest-proxy/bpmp-guest-proxy.c
 @@ -0,0 +1,463 @@
 +/**
-+ * 
++ *
 + * NVIDIA BPMP Guest Proxy Kernel Module
 + * (c) 2023 Unikie, Oy
 + * (c) 2023 Vadim Likholetov vadim.likholetov@unikie.com
-+ * 
++ *
 +*/
 +#include <linux/module.h>	  // Core header for modules.
 +#include <linux/device.h>	  // Supports driver model.
@@ -96,12 +96,12 @@ index 000000000000..51012d8001a1
 +
 +
 +#define DEVICE_NAME "bpmp-guest" // Device name.
-+#define CLASS_NAME "char"	  
++#define CLASS_NAME "char"
 +
-+MODULE_LICENSE("GPL");						 
-+MODULE_AUTHOR("Vadim Likholetov");					 
-+MODULE_DESCRIPTION("NVidia BPMP Guest Proxy Kernel Module"); 
-+MODULE_VERSION("0.1");				 
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Vadim Likholetov");
++MODULE_DESCRIPTION("NVidia BPMP Guest Proxy Kernel Module");
++MODULE_VERSION("0.1");
 +
 +
 +#define TX_BUF         0x0000
@@ -263,7 +263,7 @@ index 000000000000..51012d8001a1
 +int tegra_bpmp_guest_init(void)
 +{
 +
-+	
++
 +	deb_info("%s, installing module.", __func__);
 +
 +	deb_info("bpmp_vpa: 0x%llX", bpmp_vpa);
@@ -295,7 +295,7 @@ index 000000000000..51012d8001a1
 +	bpmp_guest_proxy_device = device_create(bpmp_guest_proxy_class, NULL, MKDEV(major_number, 0), NULL, DEVICE_NAME);
 +	if (IS_ERR(bpmp_guest_proxy_device))
 +	{								 // Clean up if there is an error
-+		class_destroy(bpmp_guest_proxy_class); 
++		class_destroy(bpmp_guest_proxy_class);
 +		unregister_chrdev(major_number, DEVICE_NAME);
 +		deb_error("Failed to create the device\n");
 +		return PTR_ERR(bpmp_guest_proxy_device);
@@ -373,7 +373,7 @@ index 000000000000..51012d8001a1
 +
 +
 +int my_tegra_bpmp_transfer(struct tegra_bpmp *bpmp, struct tegra_bpmp_message *msg)
-+{   
++{
 +
 +	unsigned char io_buffer[MEM_SIZE];
 +	size_t org_tx_size = 0;
@@ -392,18 +392,18 @@ index 000000000000..51012d8001a1
 +	// Copy msg, tx data and rx data to a single io_buffer
 +    memcpy(&io_buffer[TX_BUF], msg->tx.data, msg->tx.size);
 +	memcpy(&io_buffer[TX_SIZ], &msg->tx.size, sizeof(msg->tx.size));
-+	
++
 +	memcpy(&io_buffer[RX_BUF], msg->rx.data, msg->rx.size);
 +	memcpy(&io_buffer[RX_SIZ], &msg->rx.size, sizeof(msg->rx.size));
 +
 +	memcpy(&io_buffer[MRQ], &msg->mrq, sizeof(msg->mrq));
-+	
++
 +
 +    hexDump("msg", &msg, sizeof(struct tegra_bpmp_message));
 +    deb_info("msg.tx.data: %p\n", msg->tx.data);
 +    hexDump("msg.tx.data", msg->tx.data, msg->tx.size);
 +	deb_info("msg->rx.size: %ld\n", msg->rx.size);
-+	
++
 +	// Execute the request by coping the io_buffer
 +	memcpy_toio(mem_iova, io_buffer, MEM_SIZE);
 +
@@ -413,8 +413,8 @@ index 000000000000..51012d8001a1
 +	// Copy from io_buffer to msg, tx data and rx data
 +	memcpy(&msg->tx.size, &io_buffer[TX_SIZ], sizeof(msg->tx.size));
 +	memcpy(&msg->rx.size, &io_buffer[RX_SIZ], sizeof(msg->rx.size));
-+	
-+	// If new msg->tx/rx.size is greater than the original msg->tx/rx.size, 
++
++	// If new msg->tx/rx.size is greater than the original msg->tx/rx.size,
 +	// use the original because it is the max size of the destination buffer.
 +	if(msg->tx.size > org_tx_size)
 +		msg->tx.size = org_tx_size;
@@ -429,7 +429,7 @@ index 000000000000..51012d8001a1
 +
 +	if(msg->rx.data)
 +		memcpy(msg->rx.data, &io_buffer[RX_BUF], msg->rx.size);
-+	
++
 +	memcpy(&msg->rx.ret, &io_buffer[RET_COD], sizeof(msg->rx.ret));
 +
 +	deb_info("%s, END ret: %d\n", __func__, msg->rx.ret);
@@ -441,7 +441,7 @@ index 000000000000..51012d8001a1
 + * Writes to the device
 + */
 +
-+#define BUF_SIZE 1024 
++#define BUF_SIZE 1024
 +
 +static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t *offset)
 +{
@@ -480,7 +480,7 @@ index 000000000000..51012d8001a1
 +	memset(rxbuf, 0, len);
 +
 +	ret = -EFAULT;
-+	
++
 +	if (copy_from_user(kbuf, buffer, len)) {
 +		deb_error("copy_from_user(1) failed\n");
 +		goto out_cfu;
@@ -494,7 +494,7 @@ index 000000000000..51012d8001a1
 +	if (copy_from_user(rxbuf, kbuf->rx.data, kbuf->rx.size)) {
 +		deb_error("copy_from_user(3) failed\n");
 +		goto out_cfu;
-+	}	
++	}
 +
 +	usertxbuf = (void*)kbuf->tx.data; //save userspace buffers addresses
 +	userrxbuf = kbuf->rx.data;
@@ -519,7 +519,7 @@ index 000000000000..51012d8001a1
 +
 +	kbuf->tx.data=usertxbuf;
 +	kbuf->rx.data=userrxbuf;
-+	
++
 +	if (copy_to_user((void *)buffer, kbuf, len)) {
 +		deb_error("copy_to_user(1) failed\n");
 +		goto out_notok;
@@ -549,10 +549,10 @@ index 000000000000..08eb89367064
 +    depends on TEGRA_BPMP
 +	bool "Tegra BPMP host proxy support"
 +	help
-+	  Exposes the BPMP capabilities to the user level, in order to support the 
++	  Exposes the BPMP capabilities to the user level, in order to support the
 +	  BPMP dependent devices passthrough to the virtual machines.
 +
-+	  Say Y here to enable this driver and to compile this driver as a module, 
++	  Say Y here to enable this driver and to compile this driver as a module,
 +	  choose M here. If unsure, say N
 +
 diff --git a/drivers/firmware/tegra/bpmp-host-proxy/Makefile b/drivers/firmware/tegra/bpmp-host-proxy/Makefile
@@ -569,11 +569,11 @@ index 000000000000..409c97fde642
 +++ b/drivers/firmware/tegra/bpmp-host-proxy/bpmp-host-proxy.c
 @@ -0,0 +1,520 @@
 +/**
-+ * 
++ *
 + * NVIDIA BPMP Host Proxy Kernel Module
 + * (c) 2023 Unikie, Oy
 + * (c) 2023 Vadim Likholetov vadim.likholetov@unikie.com
-+ * 
++ *
 +*/
 +#include <linux/module.h>	  // Core header for modules.
 +#include <linux/device.h>	  // Supports driver model.
@@ -600,13 +600,13 @@ index 000000000000..409c97fde642
 +/**
 + * Put this flag in 0 in order that the BPMP host proxy only allows
 + * the allowed BPMP resources to be used by the VMs.
-+ * 
++ *
 + * Put this flag in 1 in order that the BPMP host proxy allows
 + * all the BPMP resources to be accessible by the virtual machines.
 + * This option is useful for debugging, but is INSECURE, and it could
-+ * stop the host. To avoid stop the host use 
++ * stop the host. To avoid stop the host use
 + * "clk_ignore_unused pd_ignore_unused" in kernel command line
-+ * 
++ *
 +*/
 +#define BPMP_HOST_ALLOWS_ALL   0
 +
@@ -648,7 +648,7 @@ index 000000000000..409c97fde642
 +};
 +
 +// BPMP allowed resources structure
-+static struct bpmp_allowed_res bpmp_ares; 
++static struct bpmp_allowed_res bpmp_ares;
 +
 +#if BPMP_HOST_VERBOSE
 +// Usage:
@@ -744,12 +744,12 @@ index 000000000000..409c97fde642
 +static int bpmp_host_proxy_probe(struct platform_device *pdev)
 +{
 +	int i;
-+	
++
 +	deb_info("%s, installing module.", __func__);
 +
 +	// Read allowed clocks and resets from the device tree
 +	// if they are defined or BPMP_HOST_ALLOWS_ALL continue
-+	bpmp_ares.clocks_size = of_property_read_variable_u32_array(pdev->dev.of_node, 
++	bpmp_ares.clocks_size = of_property_read_variable_u32_array(pdev->dev.of_node,
 +		"allowed-clocks", bpmp_ares.clock, 0, BPMP_HOST_MAX_CLOCKS_SIZE);
 +
 +	if(!bpmp_ares.clocks_size && !BPMP_HOST_ALLOWS_ALL){
@@ -762,7 +762,7 @@ index 000000000000..409c97fde642
 +		deb_info("bpmp_ares.clock %d", bpmp_ares.clock[i]);
 +	}
 +
-+	bpmp_ares.resets_size = of_property_read_variable_u32_array(pdev->dev.of_node, 
++	bpmp_ares.resets_size = of_property_read_variable_u32_array(pdev->dev.of_node,
 +		"allowed-resets", bpmp_ares.reset, 0, BPMP_HOST_MAX_RESETS_SIZE);
 +
 +	if(!bpmp_ares.resets_size && !BPMP_HOST_ALLOWS_ALL){
@@ -777,7 +777,7 @@ index 000000000000..409c97fde642
 +
 +
 +	// Read allowed power domains from the device tree
-+	bpmp_ares.pd_size = of_property_read_variable_u32_array(pdev->dev.of_node, 
++	bpmp_ares.pd_size = of_property_read_variable_u32_array(pdev->dev.of_node,
 +		"allowed-power-domains", bpmp_ares.pd, 0, BPMP_HOST_MAX_POWER_DOMAINS_SIZE);
 +
 +	deb_info("bpmp_ares.pd_size: %d", bpmp_ares.pd_size);
@@ -808,7 +808,7 @@ index 000000000000..409c97fde642
 +	bpmp_host_proxy_device = device_create(bpmp_host_proxy_class, NULL, MKDEV(major_number, 0), NULL, DEVICE_NAME);
 +	if (IS_ERR(bpmp_host_proxy_device))
 +	{								 // Clean up if there is an error
-+		class_destroy(bpmp_host_proxy_class); 
++		class_destroy(bpmp_host_proxy_class);
 +		unregister_chrdev(major_number, DEVICE_NAME);
 +		deb_error("Failed to create the device\n");
 +		return PTR_ERR(bpmp_host_proxy_device);
@@ -885,7 +885,7 @@ index 000000000000..409c97fde642
 +	   msg->mrq == MRQ_EMC_DVFS_EMCHUB ||
 +	   msg->mrq == MRQ_ISO_CLIENT ||
 +	   msg->mrq == MRQ_STRAP ||
-+	   msg->mrq == MRQ_BWMGR || 
++	   msg->mrq == MRQ_BWMGR ||
 +	   msg->mrq == MRQ_QUERY_FW_TAG ){
 +		return true;
 +	}
@@ -921,7 +921,7 @@ index 000000000000..409c97fde642
 +			return true;
 +		}
 +
-+		deb_warn("Warning, clock not allowed for: %d, with command: %d", 
++		deb_warn("Warning, clock not allowed for: %d, with command: %d",
 +			clock_req->cmd_and_id & 0x0FFF, clk_cmd);
 +		return false;
 +	}
@@ -933,7 +933,7 @@ index 000000000000..409c97fde642
 +				return true;
 +			}
 +		}
-+		
++
 +		// If there is a get info command, allow it no matters the ID
 +		if(pg_req->cmd == CMD_PG_GET_STATE ||
 +		   pg_req->cmd == CMD_PG_GET_NAME ||
@@ -941,7 +941,7 @@ index 000000000000..409c97fde642
 +			return true;
 +		}
 +
-+		deb_warn("Warning, pg not allowed for: %d, with command: %d", 
++		deb_warn("Warning, pg not allowed for: %d, with command: %d",
 +			pg_req->id, pg_req->cmd);
 +		return false;
 +	}
@@ -954,7 +954,7 @@ index 000000000000..409c97fde642
 +extern int tegra_bpmp_transfer(struct tegra_bpmp *, struct tegra_bpmp_message *);
 +extern struct tegra_bpmp *tegra_bpmp_host_device;
 +
-+#define BUF_SIZE 1024 
++#define BUF_SIZE 1024
 +
 +/*
 + * Writes to the device
@@ -986,7 +986,7 @@ index 000000000000..409c97fde642
 +	memset(kbuf, 0, len);
 +
 +	ret = -EFAULT;
-+	
++
 +	// Copy header
 +	if (copy_from_user(kbuf, buffer, len)) {
 +		deb_error("copy_from_user(1) failed\n");
@@ -1009,12 +1009,12 @@ index 000000000000..409c97fde642
 +	rxbuf = kmalloc(BUF_SIZE, GFP_KERNEL);
 +	if (!rxbuf)
 +		goto out_nomem;
-+	
++
 +	memset(rxbuf, 0, BUF_SIZE);
 +	if (copy_from_user(rxbuf, kbuf->rx.data, kbuf->rx.size)) {
 +		deb_error("copy_from_user(3) failed\n");
 +		goto out_cfu;
-+	}	
++	}
 +
 +
 +	usertxbuf = (void*)kbuf->tx.data; //save userspace buffers addresses
@@ -1053,7 +1053,7 @@ index 000000000000..409c97fde642
 +
 +	kbuf->tx.data=usertxbuf;
 +	kbuf->rx.data=userrxbuf;
-+	
++
 +	if (copy_to_user((void *)buffer, kbuf, len)) {
 +		deb_error("copy_to_user(1) failed\n");
 +		goto out_notok;
@@ -1123,7 +1123,7 @@ index 63ab21d89c2c..c98fbb47c5b0 100644
 @@ -28,6 +28,9 @@ struct tegra186_bpmp {
  	} mbox;
  };
- 
+
 +extern uint64_t bpmp_vpa;
 +int tegra_bpmp_guest_init(void);
 +
@@ -1133,7 +1133,7 @@ index 63ab21d89c2c..c98fbb47c5b0 100644
 @@ -173,6 +176,16 @@ static int tegra186_bpmp_init(struct tegra_bpmp *bpmp)
  	bpmp->priv = priv;
  	priv->parent = bpmp;
- 
+
 +#ifdef CONFIG_TEGRA_BPMP_GUEST_PROXY
 +	// If virtual-pa node is defined, it means that we are using a virtual BPMP
 +	// then we have to initialize the bpmp-guest
@@ -1150,14 +1150,14 @@ index 63ab21d89c2c..c98fbb47c5b0 100644
 @@ -263,6 +276,11 @@ static void tegra186_bpmp_deinit(struct tegra_bpmp *bpmp)
  	struct tegra186_bpmp *priv = bpmp->priv;
  	unsigned int i;
- 
+
 +	// If using BPMP guest proxy, do no deinit the module
 +	if(bpmp_vpa){
 +		return;
 +	}
 +
  	mbox_free_channel(priv->mbox.channel);
- 
+
  	for (i = 0; i < bpmp->threaded.count; i++)
 diff --git a/drivers/firmware/tegra/bpmp.c b/drivers/firmware/tegra/bpmp.c
 index 1c01b894ea28..9b6bb0089d59 100644
@@ -1166,7 +1166,7 @@ index 1c01b894ea28..9b6bb0089d59 100644
 @@ -77,6 +77,21 @@ struct tegra_bpmp *of_tegra_bpmp_get(void)
  }
  EXPORT_SYMBOL_GPL(of_tegra_bpmp_get);
- 
+
 +
 +// For bpmp-virt module
 +struct tegra_bpmp *tegra_bpmp_host_device = NULL;
@@ -1186,7 +1186,7 @@ index 1c01b894ea28..9b6bb0089d59 100644
  {
  	struct platform_device *pdev;
 @@ -102,6 +117,7 @@ struct tegra_bpmp *tegra_bpmp_get(struct device *dev)
- 
+
  put:
  	of_node_put(np);
 +	tegra_bpmp_host_device = bpmp;
@@ -1194,9 +1194,9 @@ index 1c01b894ea28..9b6bb0089d59 100644
  }
  EXPORT_SYMBOL_GPL(tegra_bpmp_get);
 @@ -368,6 +384,25 @@ int tegra_bpmp_transfer_atomic(struct tegra_bpmp *bpmp,
- 
+
  	spin_lock(&bpmp->atomic_tx_lock);
- 
+
 +	// vadikas -- redirect request to virtio module
 +	if (tegra_bpmp_transfer_redirect) {
 +		if (tegra_bpmp_outloud){
@@ -1222,7 +1222,7 @@ index 1c01b894ea28..9b6bb0089d59 100644
 @@ -403,8 +438,35 @@ int tegra_bpmp_transfer(struct tegra_bpmp *bpmp,
  	if (!tegra_bpmp_message_valid(msg))
  		return -EINVAL;
- 
+
 +	// vadikas -- redirect request to virtio module
 +	if (tegra_bpmp_transfer_redirect) {
 +		if (tegra_bpmp_outloud && (msg->mrq != 0x4B)){
@@ -1254,11 +1254,11 @@ index 1c01b894ea28..9b6bb0089d59 100644
 +
  	if (IS_ERR(channel))
  		return PTR_ERR(channel);
- 
+
 @@ -418,8 +480,15 @@ int tegra_bpmp_transfer(struct tegra_bpmp *bpmp,
  	if (err == 0)
  		return -ETIMEDOUT;
- 
+
 -	return tegra_bpmp_channel_read(channel, msg->rx.data, msg->rx.size,
 +	err = tegra_bpmp_channel_read(channel, msg->rx.data, msg->rx.size,
  				       &msg->rx.ret);
@@ -1271,6 +1271,6 @@ index 1c01b894ea28..9b6bb0089d59 100644
 +	return err;
  }
  EXPORT_SYMBOL_GPL(tegra_bpmp_transfer);
- 
--- 
+
+--
 2.34.1
