@@ -12,6 +12,7 @@
       (import ./sysvms/guivm.nix { inherit inputs; })
       (import ./sysvms/audiovm.nix { inherit inputs; })
       (import ./sysvms/idsvm/idsvm.nix { inherit inputs; })
+      # TODO: Add gpuvm
       ./sysvms/idsvm/mitmproxy
       ./modules.nix
       ../hardware/common/shared-mem.nix
