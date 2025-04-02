@@ -119,11 +119,7 @@
       # 8e3bbfa rebase onto the upstream jetpack
       # TODO: after this problem is fixed in the upstream, go back to final-stretch branch
       # url = "github:tiiuae/jetpack-nixos/final-stretch"
-<<<<<<< HEAD
       url = "github:tiiuae/jetpack-nixos/final-stretch";
-=======
-      url = "github:tiiuae/jetpack-nixos/bk-final-stretch";
->>>>>>> 03aeee7 (jetson: add gpu-vm with NVIDIA Jetson GPU passthrough)
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
