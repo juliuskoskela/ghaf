@@ -26,7 +26,7 @@ path = [
   "modules/reference/hardware/jetpack/0001-ARM-SMMU-drivers-return-always-true-for-IOMMU_CAP_CA.patch",
   "modules/microvm/sysvms/idsvm/mitmproxy/mitmproxy-ca/*",
   "modules/microvm/sysvms/gpuvm_res/*",
-  "modules/reference/hardware/jetpack/nvidia-jetson-orin/virtualization/host/bpmp-virt-host/overlays/qemu/patches/*",
+  "modules/reference/hardware/jetpack/nvidia-jetson-orin/virtualization/host/bpmp-virt-host/overlays/qemu/patches/*"
 ]
 
 [[annotations]]
