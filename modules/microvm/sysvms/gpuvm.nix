@@ -172,12 +172,6 @@ let
           }) cfg.applications;
         in
         {
-          imports = [
-            ../../common
-            ../../desktop
-            ../../reference/services
-          ];
-
           ghaf = {
             # Profiles
             profiles = {
