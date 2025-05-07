@@ -325,6 +325,18 @@ boolean</p>
 <ul>
 <li><a href="https://github.com/tiiuae/ghaf/blob/main/modules/development/debug-tools.nix">https://github.com/tiiuae/ghaf/blob/main/modules/development/debug-tools.nix</a></li>
 </ul>
+<h2 id="ghafdevelopmentdebugtoolsguienable"><a class="header" href="#ghafdevelopmentdebugtoolsguienable">ghaf.development.debug.tools.gui.enable</a></h2>
+<p>Whether to enable Enable GUI Debugging Tools.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em>
+<code>false</code></p>
+<p><em>Example:</em>
+<code>true</code></p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/tiiuae/ghaf/blob/main/modules/development/dt-gui.nix">https://github.com/tiiuae/ghaf/blob/main/modules/development/dt-gui.nix</a></li>
+</ul>
 <h2 id="ghafdevelopmentnix-setupenable"><a class="header" href="#ghafdevelopmentnix-setupenable">ghaf.development.nix-setup.enable</a></h2>
 <p>Whether to enable Target Nix config options.</p>
 <p><em>Type:</em>
@@ -681,6 +693,16 @@ string</p>
 <ul>
 <li><a href="https://github.com/tiiuae/ghaf/blob/main/modules/desktop/graphics/labwc.nix">https://github.com/tiiuae/ghaf/blob/main/modules/desktop/graphics/labwc.nix</a></li>
 </ul>
+<h2 id="ghafgraphicslabwcextravariables"><a class="header" href="#ghafgraphicslabwcextravariables">ghaf.graphics.labwc.extraVariables</a></h2>
+<p>Extra environment variables applied to ghaf application launcher.</p>
+<p><em>Type:</em>
+attribute set</p>
+<p><em>Default:</em>
+<code>{ }</code></p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/tiiuae/ghaf/blob/main/modules/desktop/graphics/labwc.nix">https://github.com/tiiuae/ghaf/blob/main/modules/desktop/graphics/labwc.nix</a></li>
+</ul>
 <h2 id="ghafgraphicslabwcframecolouring"><a class="header" href="#ghafgraphicslabwcframecolouring">ghaf.graphics.labwc.frameColouring</a></h2>
 <p>List of applications and their frame colours</p>
 <p><em>Type:</em>
@@ -910,6 +932,17 @@ boolean</p>
 <code>false</code></p>
 <p><em>Example:</em>
 <code>true</code></p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/tiiuae/ghaf/blob/main/modules/desktop/nvidia-gpu">https://github.com/tiiuae/ghaf/blob/main/modules/desktop/nvidia-gpu</a></li>
+</ul>
+<h2 id="ghafgraphicsnvidia-setupopendrivers"><a class="header" href="#ghafgraphicsnvidia-setupopendrivers">ghaf.graphics.nvidia-setup.openDrivers</a></h2>
+<p>Whether to use the open source drivers instead of the nvidia
+proprietary drivers, e.g., for Blackwell architectures.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em>
+<code>false</code></p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/tiiuae/ghaf/blob/main/modules/desktop/nvidia-gpu">https://github.com/tiiuae/ghaf/blob/main/modules/desktop/nvidia-gpu</a></li>
@@ -2097,38 +2130,6 @@ list of (attribute set)</p>
     ];
   }
   {
-    name = "ChromeVM";
-    qmpSocket = "/var/lib/microvms/chrome-vm/chrome-vm.sock";
-    usbPassthrough = [
-      {
-        class = 14;
-        description = "Video (USB Webcams)";
-        ignore = [
-          {
-            description = "Lenovo X1 Integrated Camera";
-            productId = "b751";
-            vendorId = "04f2";
-          }
-          {
-            description = "Lenovo X1 Integrated Camera";
-            productId = "2145";
-            vendorId = "5986";
-          }
-          {
-            description = "Lenovo X1 Integrated Camera";
-            productId = "0052";
-            vendorId = "30c9";
-          }
-          {
-            description = "Lenovo X1 Integrated Camera";
-            productId = "005f";
-            vendorId = "30c9";
-          }
-        ];
-      }
-    ];
-  }
-  {
     name = "AudioVM";
     qmpSocket = "/var/lib/microvms/audio-vm/audio-vm.sock";
     usbPassthrough = [
@@ -2693,7 +2694,7 @@ list of string</p>
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINfyjcPGIRHEtXZgoF7wImA5gEY6ytIfkBeipz4lwnj6 Ganga.Ram@tii.ae"
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEA7p7hHPvPT6uTU44Nb/p9/DT9mOi8mpqNllnpfawDE tanel@nixos"
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIwGPH/oOrD1g15uiPV4gBKGk7f8ZBSyMEaptKOVs3NG jaroslawkurowski@TII-JaroslawKurowski"
-  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINS5sjFgJ+OKjQQrxdlxsdG5lodd5Zei7BXCaWc/E8R9 rodrigo.pino@tii.ae"
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHu4r7nCQ6A26HsE4+wIupvXAfVQHgBGXv0+epCho2/m rodrigo.pino@tii.ae"
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGll9sWYdGc2xi9oQ25TEcI1D3T4n8MMXoMT+lJdE/KC milla@nixos"
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAolaKCuIUBQSBFGFZI1taNX+JTAr8edqUts7A6k2Kv7"
 ]
@@ -4236,7 +4237,7 @@ string</p>
 <p><em>Type:</em>
 string <em>(read only)</em></p>
 <p><em>Default:</em>
-<code>"25.03"</code></p>
+<code>"25.05"</code></p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/tiiuae/ghaf/blob/main/modules/common/version">https://github.com/tiiuae/ghaf/blob/main/modules/common/version</a></li>
