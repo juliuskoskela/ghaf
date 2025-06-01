@@ -68,6 +68,21 @@ let
           self.nixosModules.reference-personalize
 
           {
+            security.sudo = {
+              enable = true;
+              extraRules = [
+                {
+                  users = [ "ghaf" ];
+                  commands = [
+                    {
+                      command = "ALL";
+                      options = [ "NOPASSWD" ];
+                    }
+                  ];
+                }
+              ];
+            };
+
             ghaf = {
               #virtualisation.nvidia-podman.daemon.enable = true;
               virtualisation.nvidia-docker.daemon.enable = true;

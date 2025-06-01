@@ -8,6 +8,7 @@
         ./patches/0001-nvidia-bpmp-guest-driver-initial-commit.patch
         ./patches/0002-NOP_PREDEFINED_DTB_MEMORY.patch
         ./patches/0004-vfio-platform-Add-mmio-base-property-to-define-start.patch
+        ./patches/0005-Extend-VIRT_PCIE_ECAM-memory-address-range.patch
       ];
     }
   );

@@ -94,6 +94,19 @@ let
             };
           };
 
+          boot.kernelParams = [
+            "coherent_pool=8M"
+            "cma=64M"
+            "swiotlb=force,65536"
+            "iommu=soft"
+            "initcall_debug" # adds detailed kernel initialization tracing
+            "loglevel=7" # verbose logging level
+          ];
+
+          boot.extraModprobeConfig = ''
+            options rtw88_core debug_mask=0x00000fff
+          '';
+
           microvm = {
             # Optimize is disabled because when it is enabled, qemu is built without libusb
             optimize.enable = false;
@@ -108,18 +121,34 @@ let
             ];
 
             writableStoreOverlay = lib.mkIf config.ghaf.development.debug.tools.enable "/nix/.rw-store";
+
             qemu = {
               machine =
                 {
-                  # Use the same machine type as the host
                   x86_64-linux = "q35";
                   aarch64-linux = "virt";
                 }
                 .${config.nixpkgs.hostPlatform.system};
+
               extraArgs = [
                 "-device"
                 "qemu-xhci"
+
+                # Enable DMA tracing via individual event options
+                "-trace"
+                "events=/tmp/trace-events"
+                "-trace"
+                "memory_region_ram_*,file=/tmp/qemu-trace.log"
+                # "-trace"
+                # "vfio_dma_map"
+                # "-trace"
+                # "vfio_dma_unmap"
+                # "-trace"
+                # "vfio_region_*"
+                # "-trace"
+                # "memory_region_ram_*"
               ];
+
             };
           };
         }
