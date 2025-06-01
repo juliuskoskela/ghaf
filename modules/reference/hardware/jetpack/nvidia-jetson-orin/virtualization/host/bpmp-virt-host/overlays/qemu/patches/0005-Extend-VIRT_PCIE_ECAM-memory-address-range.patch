@@ -1,0 +1,29 @@
+From c28b8d72545622752f6ffe60e2ac9019153764f1 Mon Sep 17 00:00:00 2001
+From: Julius Koskela <julius.koskela@digimuoto.com>
+Date: Mon, 19 May 2025 10:22:41 +0300
+Subject: [PATCH] Extend VIRT_PCIE_ECAM memory address range
+
+Signed-off-by: Julius Koskela <julius.koskela@digimuoto.com>
+---
+ hw/arm/virt.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index ef39667e94..3fe36d2efa 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -189,9 +189,9 @@ static const MemMapEntry base_memmap[] = {
+     [VIRT_SECURE_MEM] =         { 0x0e000000, 0x01000000 },
+     [VIRT_PCIE_MMIO] =          { 0x10000000, 0x2eff0000 },
+     [VIRT_PCIE_PIO] =           { 0x3eff0000, 0x00010000 },
+-    [VIRT_PCIE_ECAM] =          { 0x3f000000, 0x01000000 },
++    [VIRT_PCIE_ECAM] =          { 0x400000000, 0x2C0000000 },
+     /* Actual RAM size depends on initial RAM and device memory settings */
+-    [VIRT_MEM] =                { 0x2000000000, LEGACY_RAMLIMIT_BYTES },
++    [VIRT_MEM] =                { 0x300000000, LEGACY_RAMLIMIT_BYTES },
+ };
+ 
+ /*
+-- 
+2.47.0
+
