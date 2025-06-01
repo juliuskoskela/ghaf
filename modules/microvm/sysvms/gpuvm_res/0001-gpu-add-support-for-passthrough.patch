@@ -30,7 +30,6 @@ index fe3ad97..ea9234e 100644
 +//#define NVGPU_DEFAULT_DBG_MASK		0xFFFFFFFB      // Remove register access nvgpu_writel:43
 +//#define NVGPU_DEFAULT_DBG_MASK        0x00400080         // Only Memory mappings, DMA allocation prints
  #define NVGPU_DEFAULT_DBG_MASK		U64(0)
-
  #define	gpu_dbg_info		BIT(0)	/* Lightly verbose info. */
 diff --git a/nvgpu/drivers/gpu/nvgpu/os/linux/driver_common.c b/nvgpu/drivers/gpu/nvgpu/os/linux/driver_common.c
 index b0ae8c8..463f4f7 100644
@@ -39,7 +38,6 @@ index b0ae8c8..463f4f7 100644
 @@ -47,6 +47,8 @@
  #include "scale.h"
  #include "driver_common.h"
-
 +#include <linux/nvmap_exports.h>
 +
  #define EMC3D_DEFAULT_RATIO 750
@@ -48,7 +46,6 @@ index b0ae8c8..463f4f7 100644
 @@ -450,6 +452,15 @@ int nvgpu_probe(struct gk20a *g,
  	struct device_node *np = dev->of_node;
  	bool disable_l3_alloc = false;
-
 +	// TODO: address from DTB
 +	nvgpu_info(g, "nvmap_dma_declare_coherent_memory(dev, 0x80000000, 0x80000000, 0x08000000, 0, 0, 0);");
 +	err = nvmap_dma_declare_coherent_memory(dev, 0x80000000, 0x80000000, 0x08000000, 0, 0, 0);
@@ -83,7 +80,6 @@ index bf9e930..1a827dd 100644
 +	nvgpu_info(g, "WARNING: %s hardcode returning 0", __func__);
 +	return 0;
  }
-
  int nvgpu_tegra_fuse_read_opt_emc_disable(struct gk20a *g, u32 *val)
 diff --git a/nvgpu/drivers/gpu/nvgpu/os/linux/linux-dma.c b/nvgpu/drivers/gpu/nvgpu/os/linux/linux-dma.c
 index 28fb389..321d807 100644
@@ -102,7 +98,6 @@ index 28fb389..321d807 100644
  	void *alloc_ret;
  	int err;
 +	flags = NVGPU_DMA_PHYSICALLY_ADDRESSED;
-
  	if (nvgpu_mem_is_valid(mem)) {
  		nvgpu_warn(g, "memory leak !!");
 @@ -318,6 +320,18 @@ int nvgpu_dma_alloc_flags_sys(struct gk20a *g, unsigned long flags,
@@ -161,7 +156,6 @@ index 9081c1f..22ac583 100644
  	struct device *dev = dev_from_gk20a(g);
  	struct gk20a_platform *platform = gk20a_get_platform(dev);
  	u64 ipa = sg_phys((struct scatterlist *)sgl);
-
 +	if(ipa < 0x100000000)
 +		ipa += CMA_OFFSET_TO_HOST_PA;
 +	else
