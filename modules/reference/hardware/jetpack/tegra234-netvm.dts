@@ -17,6 +17,11 @@
 		compatible = "arm,psci-1.0\0arm,psci-0.2\0arm,psci";
 	};
 
+	memory@b0000000 {
+		reg = <0x00 0xb0000000 0x00 0x10000000>;
+		device_type = "memory";
+	};
+
 	platform-bus@60000000 {
 		interrupt-parent = <0x8002>;
 		ranges = <0x00 0x00 0x60000000 0xc0000000>;
