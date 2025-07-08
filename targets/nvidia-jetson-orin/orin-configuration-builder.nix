@@ -44,7 +44,13 @@ let
                 ];
               };
 
-              overlays = [ self.overlays.default ];
+              overlays = [ 
+                # Provide kernelVersion for jetpack-nixos
+                (final: prev: { 
+                  kernelVersion = "bsp-default"; 
+                })
+                self.overlays.default 
+              ];
             };
           }
           (import ./optee.nix { })

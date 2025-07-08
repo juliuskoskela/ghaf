@@ -115,8 +115,8 @@
       # 33dd57c Select kernel version based on Jetson BSP version
       # 8e3bbfa rebase onto the upstream jetpack
       # TODO: after this problem is fixed in the upstream, go back to final-stretch branch
-      # url = "github:tiiuae/jetpack-nixos/final-stretch"
-      url = "github:tiiuae/jetpack-nixos/final-stretch";
+      # url = "github:anduril/jetpack-nixos";
+      url = "github:tiiuae/jetpack-nixos/final-stretch-rebased";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

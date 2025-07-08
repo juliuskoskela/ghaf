@@ -33,8 +33,6 @@ let
     buildInputs = with pkgs; [
       stdenv.cc.cc.lib
       nvidia-jetpack.l4t-cuda
-      # The CUDA packages are available at runtime via LD_LIBRARY_PATH
-      # Including them in buildInputs causes version conflicts
     ];
 
     dontStrip = true;
@@ -64,7 +62,7 @@ let
 
       # Wrap the binary with LD_LIBRARY_PATH
       wrapProgram $out/bin/ollama \
-        --set LD_LIBRARY_PATH "${pkgs.nvidia-jetpack.l4t-cuda}/lib:${pkgs.nvidia-jetpack.l4t-nvsci}/lib:${pkgs.nvidia-jetpack.l4t-core}/lib"
+        --set LD_LIBRARY_PATH "${pkgs.nvidia-jetpack.l4t-cuda}/lib"
     '';
 
     meta = with lib; {
@@ -545,8 +543,6 @@ in
           system = "aarch64-linux";
           config = {
             allowUnfree = true;
-            cudaPackages = true;
-            cudaSupport = true;
             # Don't set cudaSupport here as it will try to use nixpkgs CUDA
             # The jetpack-nixos overlay provides its own CUDA packages
           };
