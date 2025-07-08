@@ -112,7 +112,11 @@ in
         builtins.listToAttrs (map (t: lib.nameValuePair t.name t.package) crossTargets)
         // builtins.listToAttrs (
           map (
-            t: lib.nameValuePair "${t.name}-flash-script" t.hostConfiguration.pkgs.nvidia-jetpack.flashScript
+            t: lib.nameValuePair "${t.name}-flash-script" (
+              if t.hostConfiguration.config.system.build ? flashScript
+              then t.hostConfiguration.config.system.build.flashScript
+              else throw "flashScript not found in system.build for ${t.name}"
+            )
           ) crossTargets
         )
         // builtins.listToAttrs (
@@ -121,7 +125,7 @@ in
             lib.nameValuePair "${t.name}-flash-qspi"
               (t.hostConfiguration.extendModules {
                 modules = [ { ghaf.hardware.nvidia.orin.flashScriptOverrides.onlyQSPI = true; } ];
-              }).pkgs.nvidia-jetpack.flashScript
+              }).config.system.build.flashScript or (throw "flashScript not found for ${t.name}-flash-qspi")
           ) crossTargets
         );
     };

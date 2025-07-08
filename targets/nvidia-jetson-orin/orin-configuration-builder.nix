@@ -45,10 +45,7 @@ let
               };
 
               overlays = [ 
-                # Provide kernelVersion for jetpack-nixos
-                (final: prev: { 
-                  kernelVersion = "bsp-default"; 
-                })
+                # Don't manually apply jetpack-nixos overlay - the module handles this
                 self.overlays.default 
               ];
             };

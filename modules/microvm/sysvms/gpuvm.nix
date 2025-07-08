@@ -74,51 +74,6 @@ let
     };
   };
 
-  # Apply patches in nvidia-modules drivers to support display and GPU passthrough
-  nvidia-modules = config.boot.kernelPackages.nvidia-modules.overrideAttrs (oldAttrs: {
-    patches = (oldAttrs.patches or [ ]) ++ [
-      # Patch for NVGPU driver
-      ./gpuvm_res/0001-gpu-add-support-for-passthrough.patch
-      # Patch for NVMAP, DRM, and MC modules to support passthrough
-      ./gpuvm_res/0002-Add-support-for-gpu-display-passthrough.patch
-      # Patch for nvdisplay driver
-      ./gpuvm_res/0003-Add-support-for-display-passthrough.patch
-    ];
-  });
-
-  # Derivation to build the GPU-VM guest device tree
-  gpuvm-dtb = pkgs.stdenv.mkDerivation {
-    name = "gpuvm-dtb";
-    phases = [
-      "unpackPhase"
-      "buildPhase"
-      "installPhase"
-    ];
-    src = ./gpuvm_res/tegra234-gpuvm.dts;
-    nativeBuildInputs = with pkgs; [
-      dtc
-      binutils
-    ];
-    unpackPhase = ''
-      cp $src ./tegra234-gpuvm.dts
-    '';
-    buildPhase = ''
-      echo *********** config.hardware.deviceTree.kernelPackage ************
-      ls -lah ${config.boot.kernelPackages.nvidia-modules.src}
-      ls -lah ${config.boot.kernelPackages.nvidia-modules.src}/hardware/nvidia/t23x/nv-public/include/nvidia-oot/
-      $CC -E -nostdinc \
-        -I${config.boot.kernelPackages.nvidia-modules.src}/hardware/nvidia/t23x/nv-public/include/nvidia-oot \
-        -I${config.boot.kernelPackages.nvidia-modules.src}/hardware/nvidia/t23x/nv-public/include/kernel \
-        -undef -D__DTS__ \
-        -x assembler-with-cpp \
-        tegra234-gpuvm.dts > preprocessed.dts
-      dtc -I dts -O dtb -o tegra234-gpuvm.dtb preprocessed.dts
-    '';
-    installPhase = ''
-      mkdir -p $out
-      cp tegra234-gpuvm.dtb $out/
-    '';
-  };
 
   gpuvmBaseConfiguration = {
     imports = [
@@ -386,8 +341,6 @@ let
 
               # Devices to passthrough to the GPU-VM
               extraArgs = [
-                "-dtb"
-                "${gpuvm-dtb.out}/tegra234-gpuvm.dtb"
                 "-device"
                 "vfio-platform,host=60000000.vm_hs_p,mmio-base=0x60000000"
                 "-device"
@@ -484,6 +437,20 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Apply patches in nvidia-modules drivers to support display and GPU passthrough
+    boot.extraModulePackages = lib.mkIf (config.boot.kernelPackages ? nvidia-oot) [
+      (config.boot.kernelPackages.nvidia-oot.overrideAttrs (oldAttrs: {
+        patches = (oldAttrs.patches or [ ]) ++ [
+          # Patch for NVGPU driver
+          ./gpuvm_res/0001-gpu-add-support-for-passthrough.patch
+          # Patch for NVMAP, DRM, and MC modules to support passthrough
+          ./gpuvm_res/0002-Add-support-for-gpu-display-passthrough.patch
+          # Patch for nvdisplay driver
+          ./gpuvm_res/0003-Add-support-for-display-passthrough.patch
+        ];
+      }))
+    ];
+
     services.udev.extraRules = ''
       # Allow group kvm to all devices that are binded to vfio
       SUBSYSTEM=="vfio",GROUP="kvm"
@@ -537,6 +504,59 @@ in
 
     microvm.vms."${vmName}" =
       let
+        # Check if nvidia-oot is available in host kernel packages
+        hostKernelPackages = config.boot.kernelPackages;
+        hasNvidiaOot = hostKernelPackages ? nvidia-oot;
+        
+        # Derivation to build the GPU-VM guest device tree
+        gpuvm-dtb = pkgs.stdenv.mkDerivation {
+          name = "gpuvm-dtb";
+          phases = [
+            "unpackPhase"
+            "buildPhase"
+            "installPhase"
+          ];
+          src = ./gpuvm_res/tegra234-gpuvm.dts;
+          nativeBuildInputs = with pkgs; [
+            dtc
+            binutils
+          ];
+          unpackPhase = ''
+            cp $src ./tegra234-gpuvm.dts
+          '';
+          buildPhase = ''
+            echo "Building DTB without preprocessing (simplified approach)"
+            
+            # Create a temporary DTS without the problematic includes
+            cat tegra234-gpuvm.dts | sed \
+              -e '/#include <dt-bindings\/interrupt\/tegra234-irq.h>/d' \
+              -e '/#include <dt-bindings\/p2u\/tegra234-p2u.h>/d' \
+              > tegra234-gpuvm-temp.dts
+            
+            # Try to build the DTB
+            if dtc -I dts -O dtb -o tegra234-gpuvm.dtb tegra234-gpuvm-temp.dts 2>error.log; then
+              echo "DTB built successfully without preprocessing"
+            else
+              echo "DTB build failed, errors:"
+              cat error.log
+              echo ""
+              echo "Attempting build with kernel preprocessing..."
+              
+              # Fall back to preprocessing with kernel includes
+              $CC -E -nostdinc \
+                -I${hostKernelPackages.kernel.src}/include \
+                -undef -D__DTS__ \
+                -x assembler-with-cpp \
+                tegra234-gpuvm-temp.dts > preprocessed.dts
+                
+              dtc -I dts -O dtb -o tegra234-gpuvm.dtb preprocessed.dts
+            fi
+          '';
+          installPhase = ''
+            mkdir -p $out
+            cp tegra234-gpuvm.dtb $out/
+          '';
+        };
 
         qemuOverlay = import ./gpuvm_res/qemu;
         pkgs = import inputs.nixpkgs {
@@ -563,6 +583,12 @@ in
             modesetting.enable = true;
             open = false; # Important for Tegra
           };
+
+          # Add the DTB to qemu args
+          microvm.qemu.extraArgs = (gpuvmBaseConfiguration.microvm.qemu.extraArgs or []) ++ [
+            "-dtb"
+            "${gpuvm-dtb.out}/tegra234-gpuvm.dtb"
+          ];
 
           # Create admin home folder; temporary solution
           users.users.ghaf.createHome = lib.mkForce true;
@@ -654,7 +680,7 @@ in
           imports = gpuvmBaseConfiguration.imports ++ cfg.extraModules;
           boot = {
             inherit (config.boot) kernelPackages;
-            extraModulePackages = [ nvidia-modules ];
+            # The patched nvidia modules are added to the host's extraModulePackages
 
             #####################################################################
             # Nvidia modules for wayland are commeted becuase it is not working

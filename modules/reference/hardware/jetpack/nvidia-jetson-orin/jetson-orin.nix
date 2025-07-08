@@ -54,6 +54,7 @@ in
   };
 
   config = mkIf cfg.enable {
+    hardware.nvidia-jetpack.enable = true;
     hardware.nvidia-jetpack.kernel.version = "${cfg.kernelVersion}";
     nixpkgs.hostPlatform.system = "aarch64-linux";
 
