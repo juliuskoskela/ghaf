@@ -437,19 +437,9 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    # Apply patches in nvidia-modules drivers to support display and GPU passthrough
-    boot.extraModulePackages = lib.mkIf (config.boot.kernelPackages ? nvidia-oot) [
-      (config.boot.kernelPackages.nvidia-oot.overrideAttrs (oldAttrs: {
-        patches = (oldAttrs.patches or [ ]) ++ [
-          # Patch for NVGPU driver
-          ./gpuvm_res/0001-gpu-add-support-for-passthrough.patch
-          # Patch for NVMAP, DRM, and MC modules to support passthrough
-          ./gpuvm_res/0002-Add-support-for-gpu-display-passthrough.patch
-          # Patch for nvdisplay driver
-          ./gpuvm_res/0003-Add-support-for-display-passthrough.patch
-        ];
-      }))
-    ];
+    # GPU passthrough patches should be applied via overlay if needed
+    # The nvidia-oot modules are already provided by jetpack-nixos
+    # No need to add them again here - this was causing duplicate module collision
 
     services.udev.extraRules = ''
       # Allow group kvm to all devices that are binded to vfio
