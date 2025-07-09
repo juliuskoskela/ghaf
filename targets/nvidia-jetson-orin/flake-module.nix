@@ -112,10 +112,10 @@ in
         builtins.listToAttrs (map (t: lib.nameValuePair t.name t.package) crossTargets)
         // builtins.listToAttrs (
           map (
-            t: lib.nameValuePair "${t.name}-flash-script" (
-              if t.hostConfiguration.config.system.build ? flashScript
-              then t.hostConfiguration.config.system.build.flashScript
-              else throw "flashScript not found in system.build for ${t.name}"
+            t:
+            lib.nameValuePair "${t.name}-flash-script" (
+              t.hostConfiguration.config.system.build.flashScript
+                or (throw "flashScript not found in system.build for ${t.name}")
             )
           ) crossTargets
         )

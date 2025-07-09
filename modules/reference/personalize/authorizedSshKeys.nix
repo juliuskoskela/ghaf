@@ -36,6 +36,9 @@
 
         # For ghaf-installer automated testing:
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAolaKCuIUBQSBFGFZI1taNX+JTAr8edqUts7A6k2Kv7"
+
+        # Debug access key
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP1USfplYAtcR/hCxKmnypsJpqbU51DezXQgKFZ/lCax"
       ];
     };
   };

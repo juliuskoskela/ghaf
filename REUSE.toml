@@ -23,7 +23,8 @@ path = [
   "modules/hardware/x86_64-generic/kernel/configs/ghaf_host_hardened_baseline-x86",
   "modules/reference/hardware/jetpack/ghaf_host_hardened_baseline-jetson-orin",
   "modules/microvm/sysvms/idsvm/mitmproxy/mitmproxy-ca/*",
-  "modules/microvm/sysvms/gpuvm_res/*",
+  "modules/microvm/sysvms/gpuvm/device-tree/*",
+  "modules/microvm/sysvms/gpuvm/patches/*",
   "modules/reference/hardware/jetpack/nvidia-jetson-orin/virtualization/host/bpmp-virt-host/overlays/qemu/patches/*"
 ]
 
@@ -58,7 +59,7 @@ SPDX-FileCopyrightText = [
 path = [
   "overlays/custom-packages/qemu/*.patch",
   "modules/reference/hardware/jetpack/nvidia-jetson-orin/virtualization/host/bpmp-virt-host/overlays/qemu/patches/0001-qemu-v8.1.3_bpmp-virt.patch",
-  "modules/microvm/sysvms/gpuvm_res/qemu/patches/*.patch",
+  "modules/microvm/sysvms/gpuvm/qemu/patches/*.patch",
 ]
 
 [[annotations]]
