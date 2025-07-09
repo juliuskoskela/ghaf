@@ -273,6 +273,7 @@ in
     vcpu = 4;
     mem = 6000;
     hypervisor = "qemu";
+    qemu.package = pkgs.callPackage ./qemu-gpuvm.nix { };
 
     # We add these kernel parameters, in order that the BPMP in the VM turn off
     # the clocks that are not used, and the power domain that are not used in the VM
@@ -295,9 +296,8 @@ in
         # VSOCK for inter-VM communication
         "-device"
         "vhost-vsock-pci,guest-cid=${toString cfg.vsockCID}"
-        # BPMP guest proxy - required for GPU passthrough
-        "-device"
-        "tegra234-bpmp-guest"
+        # BPMP guest proxy is created automatically by virt machine
+        # The following are VFIO platform devices for GPU passthrough
         "-device"
         "vfio-platform,host=60000000.vm_hs_p,mmio-base=0x60000000"
         "-device"

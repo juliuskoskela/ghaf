@@ -47,8 +47,6 @@ let
               overlays = [
                 # Don't manually apply jetpack-nixos overlay - the module handles this
                 self.overlays.default
-                # Apply QEMU overlay LAST to ensure it overrides other QEMU modifications
-                (import ../../modules/microvm/sysvms/gpuvm/qemu)
               ];
             };
           }

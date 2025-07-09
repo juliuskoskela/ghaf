@@ -261,8 +261,7 @@ in
           '';
         };
 
-        # Custom pkgs for GPU VM with QEMU overlay
-        qemuOverlay = import ./qemu;
+        # Custom pkgs for GPU VM
         customPkgs = import inputs.nixpkgs {
           system = "aarch64-linux";
           config = {
@@ -270,13 +269,7 @@ in
             # Don't set cudaSupport here as it will try to use nixpkgs CUDA
             # The jetpack-nixos overlay provides its own CUDA packages
           };
-          overlays =
-            # CRITICAL: QEMU overlay MUST be applied FIRST!
-            # This ensures the microvm module uses our patched QEMU instead of the default
-            [ qemuOverlay ]
-            ++
-            # Then apply the rest of the overlays
-            [
+          overlays = [
               inputs.jetpack-nixos.overlays.default
               inputs.self.overlays.cuda-jetpack
               inputs.self.overlays.default

@@ -95,7 +95,7 @@
     };
 
     microvm = {
-      url = "github:astro/microvm.nix";
+      url = "github:juliuskoskela/microvm.nix/qemu-package";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         flake-utils.follows = "flake-utils";

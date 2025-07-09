@@ -119,10 +119,10 @@
 
                                 # Create activation script
                                 echo "4. Creating activation script on target..."
-                                ssh "''${TARGET_HOST}" "cat > /tmp/activate-ghaf-system.sh << 'EOF'
+                                ssh "''${TARGET_HOST}" "cat > /home/ghaf/activate-ghaf-system.sh << 'EOF'
                 #!/bin/bash
                 set -euo pipefail
-                SYSTEM_PATH=\"\$1\"
+                SYSTEM_PATH=\"\''${1:-}\"
                 if [ -z \"\''${SYSTEM_PATH}\" ]; then
                     echo \"Usage: \$0 <system-path>\"
                     exit 1
@@ -132,13 +132,13 @@
                 sudo /nix/var/nix/profiles/system/bin/switch-to-configuration boot
                 echo \"System activation complete! Reboot to use new system.\"
                 EOF"
-                                ssh "''${TARGET_HOST}" "chmod +x /tmp/activate-ghaf-system.sh"
+                                ssh "''${TARGET_HOST}" "chmod +x /home/ghaf/activate-ghaf-system.sh"
 
                                 echo ""
                                 echo "=== Deployment complete! ==="
                                 echo "To activate on target device:"
                                 echo "  1. SSH: ssh ''${TARGET_HOST}"
-                                echo "  2. Run: /tmp/activate-ghaf-system.sh ''${RESULT_PATH}"
+                                echo "  2. Run: sudo bash /home/ghaf/activate-ghaf-system.sh ''${RESULT_PATH}"
                                 echo "  3. Reboot: sudo reboot"
               '';
               category = "builder";
