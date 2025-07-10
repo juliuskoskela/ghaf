@@ -180,6 +180,7 @@ in
         "OLLAMA_MODELS=/storage/ai-models"
         "CUDA_VISIBLE_DEVICES=0"
         "HOME=/home/ghaf" # Ensure HOME is set for Ollama
+        "LD_LIBRARY_PATH=/run/current-system/sw/lib:/run/opengl-driver/lib"
       ];
 
       # Pre-start script to ensure proper setup
@@ -204,6 +205,31 @@ in
     tmpfiles.rules = lib.mkIf cfg.ollamaSupport [
       "d /storage/ai-models 0755 ghaf users -"
     ];
+
+    # Create NVIDIA device nodes since modules are built-in
+    services.nvidia-devices = {
+      description = "Create NVIDIA device nodes";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "ollama.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = pkgs.writeShellScript "create-nvidia-devices" ''
+          # Create device nodes if they don't exist
+          [ ! -e /dev/nvidia0 ] && ${pkgs.coreutils}/bin/mknod /dev/nvidia0 c 195 0
+          [ ! -e /dev/nvidiactl ] && ${pkgs.coreutils}/bin/mknod /dev/nvidiactl c 195 255
+          [ ! -e /dev/nvidia-uvm ] && ${pkgs.coreutils}/bin/mknod /dev/nvidia-uvm c 511 0
+          [ ! -e /dev/nvidia-uvm-tools ] && ${pkgs.coreutils}/bin/mknod /dev/nvidia-uvm-tools c 511 1
+          
+          # Set permissions
+          ${pkgs.coreutils}/bin/chown root:video /dev/nvidia* || true
+          ${pkgs.coreutils}/bin/chmod 0660 /dev/nvidia* || true
+          
+          # Load UVM if it's a module (might fail if built-in)
+          ${pkgs.kmod}/bin/modprobe nvidia-uvm || true
+        '';
+      };
+    };
   };
 
   environment = {
@@ -237,6 +263,8 @@ in
     variables = lib.mkIf cfg.ollamaSupport {
       OLLAMA_MODELS = "/storage/ai-models";
       OLLAMA_HOST = "0.0.0.0:11434"; # Allow external connections
+      # Add CUDA library path - libraries are in system profile
+      LD_LIBRARY_PATH = "/run/current-system/sw/lib:/run/opengl-driver/lib";
     };
   };
 
@@ -254,7 +282,7 @@ in
   # vm-networking module will handle all network configuration
   networking = {
     firewall = {
-      enable = false;
+      enable = false;  # Disabled for development/debugging
       allowedTCPPorts = lib.mkIf cfg.ollamaSupport [ 11434 ];
     };
   };
@@ -281,6 +309,17 @@ in
     "9pnet_virtio"
     "9p"
     # Note: virtiofs requires kernel config changes
+  ];
+
+  # Enable BPMP guest proxy for GPU VM
+  boot.kernelPatches = [
+    {
+      name = "enable-bpmp-guest-proxy";
+      patch = null;
+      extraStructuredConfig = with lib.kernel; {
+        TEGRA_BPMP_GUEST_PROXY = yes;
+      };
+    }
   ];
 
   microvm = {

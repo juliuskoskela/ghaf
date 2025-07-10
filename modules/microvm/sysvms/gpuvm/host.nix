@@ -136,10 +136,11 @@ in
         };
       }
       {
-        name = "enable-bpmp-virt";
+        name = "enable-bpmp-host-proxy";
         patch = null;
         extraStructuredConfig = with lib.kernel; {
-          TEGRA_BPMP_GUEST_PROXY = yes;
+          # Host needs HOST proxy for /dev/bpmp-host
+          TEGRA_BPMP_HOST_PROXY = yes;
         };
       }
     ];
@@ -152,6 +153,7 @@ in
           name = "GPU/Display passthrough overlay to host DTB";
           dtsFile = ./device-tree/gpu_passthrough_overlay.dts;
         }
+        # Note: BPMP host proxy overlay not needed with "allow all domains" patch
       ];
     };
 
@@ -166,7 +168,7 @@ in
       "vfio"
       "vfio_platform"
       "vfio_iommu_type1"
-      "tegra_bpmp_guest_proxy"
+      "tegra_bpmp_host_proxy"  # Host needs HOST proxy, not guest!
     ];
 
     # Blacklist GPU drivers on host
@@ -315,7 +317,13 @@ in
 
           boot = {
             inherit (config.boot) kernelPackages;
-            kernelModules = [ "tegra-bpmp-guest-proxy" ];
+            kernelModules = [ 
+              "tegra-bpmp-guest-proxy"
+              # Force load nvidia modules
+              "nvidia"
+              "nvidia-uvm" 
+              "nvidia-modeset"
+            ];
 
             # CRITICAL: Add patched nvidia kernel modules to the GPU VM
             extraModulePackages = [ nvidia-modules ];
