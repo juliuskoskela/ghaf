@@ -151,12 +151,19 @@ in
       User = "ghaf";
       Group = "users";
 
+      # State directory for Ollama config and keys
+      # This creates /var/lib/ollama owned by ghaf:users
+      StateDirectory = "ollama";
+      
       # Security hardening
       PrivateTmp = true;
       ProtectSystem = "strict";
       ProtectHome = true;
       NoNewPrivileges = true;
+      
+      # Allow access to storage and bind state directory to expected location
       ReadWritePaths = [ "/storage" ];
+      BindPaths = [ "/var/lib/ollama:/home/ghaf/.ollama" ];
 
       # GPU access
       SupplementaryGroups = [
@@ -172,7 +179,19 @@ in
       Environment = [
         "OLLAMA_MODELS=/storage/ai-models"
         "CUDA_VISIBLE_DEVICES=0"
+        "HOME=/home/ghaf"  # Ensure HOME is set for Ollama
       ];
+      
+      # Pre-start script to ensure proper setup
+      ExecStartPre = pkgs.writeShellScript "ollama-pre-start" ''
+        # Ensure state directory has correct permissions
+        chmod 750 /var/lib/ollama
+        
+        # Create models symlink if it doesn't exist
+        if [ ! -e /var/lib/ollama/models ]; then
+          ln -sf /storage/ai-models /var/lib/ollama/models
+        fi
+      '';
     };
   };
 
@@ -213,6 +232,12 @@ in
         pkgs.libva-utils
         pkgs.glib
       ];
+      
+    # Set Ollama environment variables for all users
+    variables = lib.mkIf cfg.ollamaSupport {
+      OLLAMA_MODELS = "/storage/ai-models";
+      OLLAMA_HOST = "0.0.0.0:11434";  # Allow external connections
+    };
   };
 
   # User configuration
