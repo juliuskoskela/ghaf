@@ -189,7 +189,7 @@ in
         # Check if nvidia-oot is available in host kernel packages
         hostKernelPackages = config.boot.kernelPackages;
         hasNvidiaOot = hostKernelPackages ? nvidia-oot;
-        
+
         # Apply patches to nvidia-oot modules for GPU passthrough
         nvidia-modules = hostKernelPackages.nvidia-oot.overrideAttrs (oldAttrs: {
           patches = (oldAttrs.patches or [ ]) ++ [
@@ -316,7 +316,7 @@ in
           boot = {
             inherit (config.boot) kernelPackages;
             kernelModules = [ "tegra-bpmp-guest-proxy" ];
-            
+
             # CRITICAL: Add patched nvidia kernel modules to the GPU VM
             extraModulePackages = [ nvidia-modules ];
           };

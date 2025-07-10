@@ -154,13 +154,13 @@ in
       # State directory for Ollama config and keys
       # This creates /var/lib/ollama owned by ghaf:users
       StateDirectory = "ollama";
-      
+
       # Security hardening
       PrivateTmp = true;
       ProtectSystem = "strict";
       ProtectHome = true;
       NoNewPrivileges = true;
-      
+
       # Allow access to storage and bind state directory to expected location
       ReadWritePaths = [ "/storage" ];
       BindPaths = [ "/var/lib/ollama:/home/ghaf/.ollama" ];
@@ -179,14 +179,14 @@ in
       Environment = [
         "OLLAMA_MODELS=/storage/ai-models"
         "CUDA_VISIBLE_DEVICES=0"
-        "HOME=/home/ghaf"  # Ensure HOME is set for Ollama
+        "HOME=/home/ghaf" # Ensure HOME is set for Ollama
       ];
-      
+
       # Pre-start script to ensure proper setup
       ExecStartPre = pkgs.writeShellScript "ollama-pre-start" ''
         # Ensure state directory has correct permissions
         chmod 750 /var/lib/ollama
-        
+
         # Create models symlink if it doesn't exist
         if [ ! -e /var/lib/ollama/models ]; then
           ln -sf /storage/ai-models /var/lib/ollama/models
@@ -232,11 +232,11 @@ in
         pkgs.libva-utils
         pkgs.glib
       ];
-      
+
     # Set Ollama environment variables for all users
     variables = lib.mkIf cfg.ollamaSupport {
       OLLAMA_MODELS = "/storage/ai-models";
-      OLLAMA_HOST = "0.0.0.0:11434";  # Allow external connections
+      OLLAMA_HOST = "0.0.0.0:11434"; # Allow external connections
     };
   };
 
@@ -268,11 +268,11 @@ in
   # Override initrd modules to exclude x86-specific modules like sata_nv
   boot.initrd.availableKernelModules = lib.mkForce [
     # Essential modules for ARM/Jetson platforms
-    "nvme"        # NVMe storage support
-    "uas"         # USB Attached SCSI
+    "nvme" # NVMe storage support
+    "uas" # USB Attached SCSI
     "usb-storage" # USB storage devices
-    "mmc_block"   # MMC/SD card support
-    "sdhci"       # SD Host Controller Interface
+    "mmc_block" # MMC/SD card support
+    "sdhci" # SD Host Controller Interface
     "sdhci-tegra" # Tegra-specific SDHCI
     # Virtio modules for microvm support
     "virtio_mmio"
