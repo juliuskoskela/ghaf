@@ -33,6 +33,8 @@ let
     self.nixosModules.reference-host-demo-apps
     self.nixosModules.reference-programs
     self.nixosModules.reference-personalize
+    ../../modules/jetson-shutdown-fix.nix # Fix RCU stalls during shutdown
+    ../../modules/jetson-initrd-fix.nix # Fix initrd kernel modules for ARM
   ];
 
   # concatinate modules that are specific to a target
