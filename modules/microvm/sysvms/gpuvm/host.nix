@@ -168,7 +168,7 @@ in
       "vfio"
       "vfio_platform"
       "vfio_iommu_type1"
-      "tegra_bpmp_host_proxy"  # Host needs HOST proxy, not guest!
+      "tegra_bpmp_host_proxy" # Host needs HOST proxy, not guest!
     ];
 
     # Blacklist GPU drivers on host
@@ -317,11 +317,11 @@ in
 
           boot = {
             inherit (config.boot) kernelPackages;
-            kernelModules = [ 
+            kernelModules = [
               "tegra-bpmp-guest-proxy"
               # Force load nvidia modules
               "nvidia"
-              "nvidia-uvm" 
+              "nvidia-uvm"
               "nvidia-modeset"
             ];
 

@@ -220,11 +220,11 @@ in
           [ ! -e /dev/nvidiactl ] && ${pkgs.coreutils}/bin/mknod /dev/nvidiactl c 195 255
           [ ! -e /dev/nvidia-uvm ] && ${pkgs.coreutils}/bin/mknod /dev/nvidia-uvm c 511 0
           [ ! -e /dev/nvidia-uvm-tools ] && ${pkgs.coreutils}/bin/mknod /dev/nvidia-uvm-tools c 511 1
-          
+
           # Set permissions
           ${pkgs.coreutils}/bin/chown root:video /dev/nvidia* || true
           ${pkgs.coreutils}/bin/chmod 0660 /dev/nvidia* || true
-          
+
           # Load UVM if it's a module (might fail if built-in)
           ${pkgs.kmod}/bin/modprobe nvidia-uvm || true
         '';
@@ -282,7 +282,7 @@ in
   # vm-networking module will handle all network configuration
   networking = {
     firewall = {
-      enable = false;  # Disabled for development/debugging
+      enable = false; # Disabled for development/debugging
       allowedTCPPorts = lib.mkIf cfg.ollamaSupport [ 11434 ];
     };
   };
