@@ -26,10 +26,20 @@ _:
             "jetson_35.6"
           else if l4tVersion == "36.4.3" then
             "jetson_36.4.3"
+          else if l4tVersion == "36.4.4" then
+            "jetson_36.4.4"
           else
             throw "Mismatching OP-TEE sources";
 
-        sha256 = "sha256-YIkONwvQ3PYF12PcGlX+C4/wlo4n12rrQI3PLnK408k=";
+        sha256 = 
+          if l4tVersion == "35.6.0" then
+            "sha256-YIkONwvQ3PYF12PcGlX+C4/wlo4n12rrQI3PLnK408k="
+          else if l4tVersion == "36.4.3" then
+            "sha256-YIkONwvQ3PYF12PcGlX+C4/wlo4n12rrQI3PLnK408k="
+          else if l4tVersion == "36.4.4" then
+            "sha256-wUKp3dqndSforVHrGTObUPwGflUgPio/2MRTAzXbKqA="
+          else
+            throw "Mismatching OP-TEE sources";
       };
       patches = [ ./0001-ta-pkcs11-Build-time-option-for-controlling-pin-lock.patch ];
     };
