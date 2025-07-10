@@ -1,11 +1,12 @@
 # Copyright 2022-2024 TII (SSRC) and the Ghaf contributors
 # SPDX-License-Identifier: Apache-2.0
-{ inputs
-, lib
-, pkgs
-, vmName
-, cfg
-, ...
+{
+  inputs,
+  lib,
+  pkgs,
+  vmName,
+  cfg,
+  ...
 }:
 let
   inherit (import ../../../../lib/launcher.nix { inherit pkgs lib; }) rmDesktopEntries;
@@ -19,25 +20,21 @@ let
   virtualApps = [ ];
 
   # Launchers for all virtualized applications that run in AppVMs
-  virtualLaunchers = map
-    (app: rec {
-      inherit (app) name;
-      inherit (app) description;
-      vm = app.vmName;
-      path = "${pkgs.givc-cli}/bin/givc-cli start app --vm ${vm} ${app.givcName}";
-      inherit (app) icon;
-    })
-    virtualApps;
+  virtualLaunchers = map (app: rec {
+    inherit (app) name;
+    inherit (app) description;
+    vm = app.vmName;
+    path = "${pkgs.givc-cli}/bin/givc-cli start app --vm ${vm} ${app.givcName}";
+    inherit (app) icon;
+  }) virtualApps;
 
   # Launchers for all desktop, non-virtualized applications that run in the GPUVM
-  gpuvmLaunchers = map
-    (app: {
-      inherit (app) name;
-      inherit (app) description;
-      path = app.command;
-      inherit (app) icon;
-    })
-    cfg.applications;
+  gpuvmLaunchers = map (app: {
+    inherit (app) name;
+    inherit (app) description;
+    path = app.command;
+    inherit (app) icon;
+  }) cfg.applications;
 in
 {
   imports = [
@@ -109,12 +106,10 @@ in
       labwc = {
         autolock.enable = false;
         autologinUser = "ghaf";
-        securityContext = map
-          (vm: {
-            identifier = vm.name;
-            color = vm.borderColor;
-          })
-          (lib.attrsets.mapAttrsToList (name: vm: { inherit name; } // vm) enabledVms);
+        securityContext = map (vm: {
+          identifier = vm.name;
+          color = vm.borderColor;
+        }) (lib.attrsets.mapAttrsToList (name: vm: { inherit name; } // vm) enabledVms);
       };
     };
 
@@ -333,7 +328,8 @@ in
           # Use the same machine type as the host
           x86_64-linux = "q35";
           aarch64-linux = "virt";
-        }.${pkgs.stdenv.hostPlatform.system};
+        }
+        .${pkgs.stdenv.hostPlatform.system};
     };
   };
 }

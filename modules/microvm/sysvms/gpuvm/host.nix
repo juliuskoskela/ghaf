@@ -270,11 +270,11 @@ in
             # The jetpack-nixos overlay provides its own CUDA packages
           };
           overlays = [
-              inputs.jetpack-nixos.overlays.default
-              inputs.self.overlays.cuda-jetpack
-              inputs.self.overlays.default
-              inputs.self.overlays.own-pkgs-overlay
-            ];
+            inputs.jetpack-nixos.overlays.default
+            inputs.self.overlays.cuda-jetpack
+            inputs.self.overlays.default
+            inputs.self.overlays.own-pkgs-overlay
+          ];
         };
 
       in
