@@ -31,7 +31,7 @@ _:
           else
             throw "Mismatching OP-TEE sources";
 
-        sha256 = 
+        sha256 =
           if l4tVersion == "35.6.0" then
             "sha256-YIkONwvQ3PYF12PcGlX+C4/wlo4n12rrQI3PLnK408k="
           else if l4tVersion == "36.4.3" then
