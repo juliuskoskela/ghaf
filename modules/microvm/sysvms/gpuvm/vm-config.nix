@@ -1,11 +1,12 @@
 # Copyright 2022-2024 TII (SSRC) and the Ghaf contributors
 # SPDX-License-Identifier: Apache-2.0
-{ inputs
-, lib
-, pkgs
-, vmName
-, cfg
-, ...
+{
+  inputs,
+  lib,
+  pkgs,
+  vmName,
+  cfg,
+  ...
 }:
 let
   inherit (import ../../../../lib/launcher.nix { inherit pkgs lib; }) rmDesktopEntries;
@@ -19,25 +20,21 @@ let
   virtualApps = [ ];
 
   # Launchers for all virtualized applications that run in AppVMs
-  virtualLaunchers = map
-    (app: rec {
-      inherit (app) name;
-      inherit (app) description;
-      vm = app.vmName;
-      path = "${pkgs.givc-cli}/bin/givc-cli start app --vm ${vm} ${app.givcName}";
-      inherit (app) icon;
-    })
-    virtualApps;
+  virtualLaunchers = map (app: rec {
+    inherit (app) name;
+    inherit (app) description;
+    vm = app.vmName;
+    path = "${pkgs.givc-cli}/bin/givc-cli start app --vm ${vm} ${app.givcName}";
+    inherit (app) icon;
+  }) virtualApps;
 
   # Launchers for all desktop, non-virtualized applications that run in the GPUVM
-  gpuvmLaunchers = map
-    (app: {
-      inherit (app) name;
-      inherit (app) description;
-      path = app.command;
-      inherit (app) icon;
-    })
-    cfg.applications;
+  gpuvmLaunchers = map (app: {
+    inherit (app) name;
+    inherit (app) description;
+    path = app.command;
+    inherit (app) icon;
+  }) cfg.applications;
 in
 {
   imports = [
@@ -48,6 +45,9 @@ in
   ];
 
   ghaf = {
+    # System
+    type = "system-vm";
+
     # Profiles
     profiles = {
       debug.enable = false;
@@ -70,7 +70,6 @@ in
     };
 
     # System
-    type = "system-vm";
     systemd = {
       enable = true;
       withName = "gpuvm-systemd";
@@ -98,10 +97,10 @@ in
     #      73|         matchConfig.PermanentMACAddress = hosts.${cfg.vmName}.mac;
     #        |                                           ^
     #      74|         linkConfig.Name = cfg.interfaceName;
-    # virtualization.microvm.vm-networking = {
-    #   enable = true;
-    #   inherit vmName;
-    # };
+    virtualization.microvm.vm-networking = {
+      enable = true;
+      inherit vmName;
+    };
 
     # Services
     graphics = {
@@ -109,12 +108,10 @@ in
       labwc = {
         autolock.enable = false;
         autologinUser = "ghaf";
-        securityContext = map
-          (vm: {
-            identifier = vm.name;
-            color = vm.borderColor;
-          })
-          (lib.attrsets.mapAttrsToList (name: vm: { inherit name; } // vm) enabledVms);
+        securityContext = map (vm: {
+          identifier = vm.name;
+          color = vm.borderColor;
+        }) (lib.attrsets.mapAttrsToList (name: vm: { inherit name; } // vm) enabledVms);
       };
     };
 
@@ -229,50 +226,37 @@ in
     ];
   };
 
-  # Networking configuration
+  # vm-networking module will handle all network configuration
   networking = {
-    hostName = vmName;
     firewall = {
       enable = false;
       allowedTCPPorts = lib.mkIf cfg.ollamaSupport [ 11434 ];
     };
-    useNetworkd = true;
   };
-
-  # Network interface configuration
-  microvm.interfaces = [
-    {
-      type = "tap";
-      id = "ethint0";
-      mac = "02:00:00:01:01:05"; # GPU VM MAC address
-    }
-  ];
-
-  systemd.network = {
-    enable = true;
-    networks."10-ethint0" = {
-      matchConfig.MACAddress = "02:00:00:01:01:05";
-      addresses = [
-        {
-          Address = "192.168.101.5/24";
-        }
-      ];
-      routes = lib.mkForce [
-        {
-          Gateway = "192.168.101.1";
-        }
-      ];
-      linkConfig.RequiredForOnline = "routable";
-    };
-  };
-
-  services.resolved.enable = true;
 
   time.timeZone = "UTC";
   system.stateVersion = lib.trivial.release;
 
   # Set the platform explicitly for aarch64
   nixpkgs.hostPlatform = "aarch64-linux";
+
+  # Override initrd modules to exclude x86-specific modules like sata_nv
+  boot.initrd.availableKernelModules = lib.mkForce [
+    # Essential modules for ARM/Jetson platforms
+    "nvme"        # NVMe storage support
+    "uas"         # USB Attached SCSI
+    "usb-storage" # USB storage devices
+    "mmc_block"   # MMC/SD card support
+    "sdhci"       # SD Host Controller Interface
+    "sdhci-tegra" # Tegra-specific SDHCI
+    # Virtio modules for microvm support
+    "virtio_mmio"
+    "virtio_pci"
+    "virtio_blk"
+    "9pnet_virtio"
+    "9p"
+    # Note: virtiofs requires kernel config changes
+  ];
 
   microvm = {
     # Optimize is disabled because when it is enabled, qemu is built without libusb
@@ -333,7 +317,8 @@ in
           # Use the same machine type as the host
           x86_64-linux = "q35";
           aarch64-linux = "virt";
-        }.${pkgs.stdenv.hostPlatform.system};
+        }
+        .${pkgs.stdenv.hostPlatform.system};
     };
   };
 }

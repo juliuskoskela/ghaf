@@ -189,6 +189,15 @@ in
         # Check if nvidia-oot is available in host kernel packages
         hostKernelPackages = config.boot.kernelPackages;
         hasNvidiaOot = hostKernelPackages ? nvidia-oot;
+        
+        # Apply patches to nvidia-oot modules for GPU passthrough
+        nvidia-modules = hostKernelPackages.nvidia-oot.overrideAttrs (oldAttrs: {
+          patches = (oldAttrs.patches or [ ]) ++ [
+            ./patches/0001-gpu-add-support-for-passthrough.patch
+            ./patches/0002-Add-support-for-gpu-display-passthrough.patch
+            ./patches/0003-Add-support-for-display-passthrough.patch
+          ];
+        });
 
         # Derivation to build the GPU-VM guest device tree
         gpuvm-dtb = pkgs.stdenv.mkDerivation {
@@ -304,7 +313,13 @@ in
             l4t-xusb-firmware # usb firmware also present in linux-firmware package, but that package is huge and has much more than needed
           ];
 
-          boot.kernelModules = [ "tegra-bpmp-guest-proxy" ];
+          boot = {
+            inherit (config.boot) kernelPackages;
+            kernelModules = [ "tegra-bpmp-guest-proxy" ];
+            
+            # CRITICAL: Add patched nvidia kernel modules to the GPU VM
+            extraModulePackages = [ nvidia-modules ];
+          };
 
           boot.initrd.systemd.enable = true;
           boot.loader = {
