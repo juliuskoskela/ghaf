@@ -83,6 +83,18 @@ in
             VIRTIO_VSOCKETS_COMMON = yes;
           };
         }
+        {
+          name = "virtiofs-config";
+          patch = null;
+          extraStructuredConfig = with lib.kernel; {
+            # Enable FUSE and VirtioFS for microvm shared filesystems
+            FUSE_FS = module;
+            VIRTIO_FS = module;
+            # DAX support for better performance (optional)
+            DAX = yes;
+            FS_DAX = yes;
+          };
+        }
       ];
     };
 
