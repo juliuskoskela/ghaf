@@ -1,0 +1,43 @@
+From 2d3e4c56c5405556605ef1bae453217c0c1dc5d4 Mon Sep 17 00:00:00 2001
+From: Julius Koskela <julius.koskela@unikie.com>
+Date: Fri, 11 Jul 2025 03:30:00 +0300
+Subject: [PATCH] arm/virt: Properly map nvidia_bpmp_guest MMIO region
+
+The nvidia_bpmp_guest device needs to be explicitly mapped to the
+guest's memory space at address 0x090c0000. Without this explicit
+mapping, the device exists in QEMU but is not accessible from the
+guest kernel.
+
+This patch ensures the device is both created and properly mapped
+using sysbus_mmio_map(), which makes the MMIO region visible in
+the guest's /proc/iomem.
+
+Signed-off-by: Julius Koskela <julius.koskela@unikie.com>
+---
+ hw/arm/virt.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index 10fd2e9f93..15b2e8f94a 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -2436,8 +2436,15 @@ static void machvirt_init(MachineState *machine)
+     /* NVIDIA BPMP guest device must be created even with custom DTB
+      * This is required for GPU passthrough on Jetson platforms
+      */
+-    if (vms->memmap[VIRT_NVIDIA_BPMP_GUEST].base) {
+-        nvidia_bpmp_guest_create(vms->memmap[VIRT_NVIDIA_BPMP_GUEST].base);
++    if (vms->memmap[VIRT_NVIDIA_BPMP_GUEST].base) {
++        DeviceState *dev;
++        hwaddr base = vms->memmap[VIRT_NVIDIA_BPMP_GUEST].base;
++        
++        dev = nvidia_bpmp_guest_create(base);
++        if (dev) {
++            /* Explicitly map the device to ensure it's accessible from guest */
++            sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, base);
++        }
+     }
+ 
+     if (machine->nvdimms_state->is_enabled) {
+-- 
+2.49.0

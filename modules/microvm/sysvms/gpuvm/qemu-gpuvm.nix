@@ -11,6 +11,8 @@ qemu.overrideAttrs (
       ./qemu/patches/0001-nvidia-bpmp-guest-driver-initial-commit.patch
       ./qemu/patches/0002-NOP_PREDEFINED_DTB_MEMORY.patch
       ./qemu/patches/0004-vfio-platform-Add-mmio-base-property-to-define-start.patch
+      ./qemu/patches/0005-arm-virt-Force-nvidia_bpmp_guest-device-creation-with-custom-DTB.patch
+      ./qemu/patches/0006-arm-virt-Properly-map-nvidia_bpmp_guest-MMIO-region.patch
     ];
 
     postPatch =

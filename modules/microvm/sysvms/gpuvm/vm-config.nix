@@ -318,6 +318,8 @@ in
       patch = null;
       extraStructuredConfig = with lib.kernel; {
         TEGRA_BPMP_GUEST_PROXY = yes;
+        # Explicitly disable HOST proxy in VM
+        TEGRA_BPMP_HOST_PROXY = lib.mkForce no;
       };
     }
   ];
@@ -352,7 +354,7 @@ in
         # VSOCK for inter-VM communication
         "-device"
         "vhost-vsock-pci,guest-cid=${toString cfg.vsockCID}"
-        # BPMP guest proxy is created automatically by virt machine
+        # Note: nvidia_bpmp_guest is created by virt machine init, not via -device
         # The following are VFIO platform devices for GPU passthrough
         "-device"
         "vfio-platform,host=60000000.vm_hs_p,mmio-base=0x60000000"
