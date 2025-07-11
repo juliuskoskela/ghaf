@@ -12,5 +12,8 @@
     ./virtualization
 
     ./optee.nix
+
+    # Debug scripts for GPU passthrough
+    ../../../../host/debug-scripts-host.nix
   ];
 }

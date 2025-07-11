@@ -42,6 +42,8 @@ in
     inputs.preservation.nixosModules.preservation
     inputs.self.nixosModules.givc
     inputs.self.nixosModules.vm-modules
+    ./nvidia-driver-fix.nix
+    ./debug-scripts.nix
   ];
 
   ghaf = {
@@ -327,6 +329,18 @@ in
         TEGRA_BPMP_GUEST_PROXY = yes;
         # Explicitly disable HOST proxy in VM
         TEGRA_BPMP_HOST_PROXY = lib.mkForce no;
+      };
+    }
+    {
+      name = "disable-gk20a-driver";
+      patch = null;
+      extraStructuredConfig = with lib.kernel; {
+        # Disable the open-source gk20a driver
+        TEGRA_GK20A = lib.mkForce no;
+        # Also disable nouveau if it's enabled
+        DRM_NOUVEAU = lib.mkForce no;
+        # Disable DRM Tegra to ensure no conflicts
+        DRM_TEGRA = lib.mkForce no;
       };
     }
   ];
