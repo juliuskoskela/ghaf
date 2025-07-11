@@ -1,8 +1,8 @@
 From 1c2a6c56c5405556605ef1bae453217c0c1dc5d3 Mon Sep 17 00:00:00 2001
 From: Julius Koskela <julius.koskela@unikie.com>
 Date: Fri, 11 Jul 2025 02:16:16 +0300
-Subject: [PATCH] arm/virt: Force nvidia_bpmp_guest device creation with custom
- DTB
+Subject: [PATCH 1/2] arm/virt: Force nvidia_bpmp_guest device creation with
+ custom DTB
 
 When using -dtb option, QEMU skips some internal device creation that
 would normally happen during machine initialization. However, the

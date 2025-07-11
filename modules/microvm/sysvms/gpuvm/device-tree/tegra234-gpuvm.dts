@@ -875,11 +875,15 @@
 		};
 
 
-		ga10b: gpu@17000000 {
+		// GPU passthrough via VFIO - simplified device definition
+		// The actual hardware access goes through VFIO
+		ga10b: gpu@64000000 {
 			compatible = "nvidia,ga10b";
-			reg = <0x0 0x17000000 0x0 0x01000000>,
-			      <0x0 0x18000000 0x0 0x01000000>,
-			      <0x0 0x03b41000 0x0 0x00001000>;
+			// These addresses map to VFIO regions shown in QEMU monitor
+			// The platform bus will handle the actual mapping
+			reg = <0x0 0x64000000 0x0 0x01000000>,  // BAR0
+			      <0x0 0x65000000 0x0 0x01000000>,  // BAR1
+			      <0x0 0x66000000 0x0 0x00001000>;  // BAR2
 			interrupt-parent = <0x8005>;
 			interrupts = <GIC_SPI 112 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 113 IRQ_TYPE_LEVEL_HIGH>,
@@ -887,9 +891,6 @@
 				     <GIC_SPI 115 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "stall0", "stall1", "stall2", "nonstall";
 			power-domains = <&bpmp TEGRA234_POWER_DOMAIN_GPU>;
-			//interconnects = <&mc TEGRA234_MEMORY_CLIENT_NVL1R &emc>,
-			//		<&mc TEGRA234_MEMORY_CLIENT_NVL1W &emc>;
-			//interconnect-names = "dma-mem", "write";
 			clocks = <&bpmp TEGRA234_CLK_GPUSYS>,
 				 <&bpmp TEGRA234_CLK_GPC0CLK>,
 				 <&bpmp TEGRA234_CLK_GPC1CLK>;
@@ -897,8 +898,8 @@
 			resets = <&bpmp TEGRA234_RESET_GPU>;
 			dma-coherent;
 			nvidia,bpmp = <&bpmp>;
-
 			status = "okay";
+			// Note: IOMMU handled by VFIO, not needed here
 		};
 
 		// We need to keep fuse here disable without passing
