@@ -47,7 +47,7 @@
               --disallow-untyped-defs \
               $out
           '';
-      fdtPath = 
+      fdtPath =
         if config.hardware.deviceTree.package == config.boot.kernelPackages.kernel then
           # Kernel package - DTBs are in dtbs/nvidia/
           "${config.hardware.deviceTree.package}/dtbs/nvidia/${config.hardware.deviceTree.name}.dtb"

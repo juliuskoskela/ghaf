@@ -8,22 +8,107 @@
 
 #include <dt-bindings/clock/tegra234-clock.h>
 #include <dt-bindings/reset/tegra234-reset.h>
+#include <dt-bindings/power/tegra234-powergate.h>
 
 / {
     overlay-name = "BPMP host proxy 2";
     compatible = "nvidia,tegra234";
-    
+
     fragment@0 {
         target-path = "/";
         __overlay__ {
             bpmp_host_proxy: bpmp_host_proxy {
                 compatible = "nvidia,bpmp-host-proxy";
-                allowed-clocks = <TEGRA234_CLK_UARTA 
-                                TEGRA234_CLK_PLLP_OUT0>;
-                allowed-resets = <TEGRA234_RESET_UARTA>;				  
+                allowed-clocks =
+                    <TEGRA234_CLK_UARTA>,
+                    <TEGRA234_CLK_PLLP_OUT0>,
+                    <TEGRA234_CLK_ACTMON>,
+                    <TEGRA234_CLK_AZA_2XBIT>,
+                    <TEGRA234_CLK_AZA_BIT>,
+                    <TEGRA234_CLK_DISP>,
+                    <TEGRA234_CLK_DISPHUBPLL>,
+                    <TEGRA234_CLK_DISPPLL>,
+                    <TEGRA234_CLK_DPAUX>,
+                    <TEGRA234_CLK_DP_LINK_REF>,
+                    <TEGRA234_CLK_DSC>,
+                    <TEGRA234_CLK_DSI_CORE>,
+                    <TEGRA234_CLK_DSI_LP>,
+                    <TEGRA234_CLK_DSI_PAD_INPUT>,
+                    <TEGRA234_CLK_DSI_PIXEL>,
+                    <TEGRA234_CLK_DSIPLL_CLKOUTA>,
+                    <TEGRA234_CLK_DSIPLL_CLKOUTPN>,
+                    <TEGRA234_CLK_DSIPLL_VCO>,
+                    <TEGRA234_CLK_EMC>,
+                    <TEGRA234_CLK_FUSE>,
+                    <TEGRA234_CLK_GPC0CLK>,
+                    <TEGRA234_CLK_GPC1CLK>,
+                    <TEGRA234_CLK_GPUSYS>,
+                    <TEGRA234_CLK_HOST1X>,
+                    <TEGRA234_CLK_HUB>,
+                    <TEGRA234_CLK_MAUD>,
+                    <TEGRA234_CLK_MIPI_CAL>,
+                    <TEGRA234_CLK_NVDEC>,
+                    <TEGRA234_CLK_NVDISPLAY_P0>,
+                    <TEGRA234_CLK_NVDISPLAY_P0_REF>,
+                    <TEGRA234_CLK_NVDISPLAY_P1>,
+                    <TEGRA234_CLK_NVJPG1>,
+                    <TEGRA234_CLK_OSC>,
+                    <TEGRA234_CLK_PLLHUB>,
+                    <TEGRA234_CLK_PRE_SF0>,
+                    <TEGRA234_CLK_PRE_SOR0>,
+                    <TEGRA234_CLK_PRE_SOR0_REF>,
+                    <TEGRA234_CLK_PRE_SOR1>,
+                    <TEGRA234_CLK_PRE_SOR1_REF>,
+                    <TEGRA234_CLK_RG0>,
+                    <TEGRA234_CLK_RG0_M>,
+                    <TEGRA234_CLK_RG1>,
+                    <TEGRA234_CLK_RG1_M>,
+                    <TEGRA234_CLK_SF0>,
+                    <TEGRA234_CLK_SF1>,
+                    <TEGRA234_CLK_SOR0>,
+                    <TEGRA234_CLK_SOR0_DIV>,
+                    <TEGRA234_CLK_SOR0_M>,
+                    <TEGRA234_CLK_SOR0_PLL_REF>,
+                    <TEGRA234_CLK_SOR0_REF>,
+                    <TEGRA234_CLK_SOR1>,
+                    <TEGRA234_CLK_SOR1_M>,
+                    <TEGRA234_CLK_SOR1_PLL_REF>,
+                    <TEGRA234_CLK_SOR1_REF>,
+                    <TEGRA234_CLK_SOR_LINKA_AFIFO>,
+                    <TEGRA234_CLK_SOR_LINKA_AFIFO_M>,
+                    <TEGRA234_CLK_SOR_LINKA_INPUT>,
+                    <TEGRA234_CLK_SOR_PAD_INPUT>,
+                    <TEGRA234_CLK_SPPLL0_CLKOUTA>,
+                    <TEGRA234_CLK_SPPLL0_CLKOUTB>,
+                    <TEGRA234_CLK_SPPLL0_CLKOUTPN>,
+                    <TEGRA234_CLK_SPPLL0_DIV10>,
+                    <TEGRA234_CLK_SPPLL0_DIV25>,
+                    <TEGRA234_CLK_SPPLL0_DIV27PN>,
+                    <TEGRA234_CLK_SPPLL0_VCO>,
+                    <TEGRA234_CLK_SPPLL1_CLKOUTPN>,
+                    <TEGRA234_CLK_SPPLL1_DIV27PN>,
+                    <TEGRA234_CLK_SPPLL1_VCO>,
+                    <TEGRA234_CLK_TSEC_PKA>,
+                    <TEGRA234_CLK_UART_FST_MIPI_CAL>,
+                    <TEGRA234_CLK_VIC>,
+                    <TEGRA234_CLK_VPLL0>,
+                    <TEGRA234_CLK_VPLL0_REF>,
+                    <TEGRA234_CLK_VPLL1>;
+                allowed-resets =
+                    <TEGRA234_RESET_UARTA>,
+                    <TEGRA234_RESET_DPAUX>,
+                    <TEGRA234_RESET_DSI_CORE>,
+                    <TEGRA234_RESET_GPU>,
+                    <TEGRA234_RESET_MIPI_CAL>,
+                    <TEGRA234_RESET_NVDEC>,
+                    <TEGRA234_RESET_NVDISPLAY>,
+                    <TEGRA234_RESET_NVJPG1>,
+                    <TEGRA234_RESET_VIC>;
+                allowed-power-domains =
+                    <TEGRA234_POWER_DOMAIN_DISP>,
+                    <TEGRA234_POWER_DOMAIN_GPU>;
                 status = "okay";
             };
         };
-
     };
 };

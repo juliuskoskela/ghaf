@@ -32,6 +32,7 @@
                 pkgs.reuse
                 config.treefmt.build.wrapper
                 self'.legacyPackages.ghaf-build-helper
+                pkgs.dtc
               ]
               ++ config.pre-commit.settings.enabledPackages
               ++ lib.attrValues config.treefmt.build.programs # make all the trefmt packages available
