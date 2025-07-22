@@ -3,7 +3,6 @@
 #
 # Configuration for NVIDIA Jetson Orin AGX/NX reference boards
 {
-  pkgs,
   lib,
   config,
   ...
@@ -63,7 +62,12 @@ in
     boot = {
       loader = {
         efi.canTouchEfiVariables = true;
-        systemd-boot.enable = true;
+        systemd-boot = {
+          enable = true;
+          # Disable systemd-boot's built-in device tree handling
+          # since we manage it manually in systemd-boot-dtb module
+          installDeviceTree = false;
+        };
       };
 
       modprobeConfig.enable = true;
@@ -127,7 +131,16 @@ in
     };
     hardware.deviceTree = {
       enable = lib.mkDefault true;
-      dtbSource = "${pkgs.nvidia-jetpack.bspSrc}/kernel/dtb/";
+
+      # Use kernel's compiled DTB files instead of NVIDIA BSP's to fix BPMP/I2C/SPI issues
+      dtbSource = "${config.boot.kernelPackages.kernel}/dtbs/nvidia/";
+
+      # Set the DTB name (without -nv suffix and without .dtb extension)
+      name = "tegra234-p3737-0000+p3701-0000";
+
+      # Don't set package here - let the device-tree module handle overlay application
+      # package = lib.mkForce config.boot.kernelPackages.kernel;
+
       # Add the include paths to build the dtb overlays
       dtboBuildExtraIncludePaths = [
         "${lib.getDev config.hardware.deviceTree.kernelPackage}/lib/modules/${config.hardware.deviceTree.kernelPackage.modDirVersion}/source/nvidia/soc/t23x/kernel-include"

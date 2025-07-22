@@ -47,7 +47,13 @@
               --disallow-untyped-defs \
               $out
           '';
-      fdtPath = "${config.hardware.deviceTree.package}/${config.hardware.deviceTree.name}";
+      fdtPath = 
+        if config.hardware.deviceTree.package == config.boot.kernelPackages.kernel then
+          # Kernel package - DTBs are in dtbs/nvidia/
+          "${config.hardware.deviceTree.package}/dtbs/nvidia/${config.hardware.deviceTree.name}.dtb"
+        else
+          # Device tree overlays package - DTBs are at root
+          "${config.hardware.deviceTree.package}/${config.hardware.deviceTree.name}.dtb";
     in
     {
       firmwareSize = 256;

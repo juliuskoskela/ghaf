@@ -17,7 +17,8 @@
 
   hardware = {
     # Device Tree
-    deviceTree.name = "tegra234-p3737-0000+p3701-0000-nv.dtb";
+    # Removed - now set in jetson-orin.nix with kernel DTBs
+    # deviceTree.name = "tegra234-p3737-0000+p3701-0000-nv.dtb";
     nvidia-jetpack = {
       enable = true;
       som = "orin-agx";

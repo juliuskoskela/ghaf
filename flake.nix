@@ -108,7 +108,8 @@
     };
 
     jetpack-nixos = {
-      url = "github:tiiuae/jetpack-nixos/final-stretch-rebased";
+      # url = "github:tiiuae/jetpack-nixos/final-stretch-rebased";
+      url = "github:juliuskoskela/jetpack-nixos/jetpack-6.2.1-r36.4.4";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
