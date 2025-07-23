@@ -259,13 +259,6 @@ in
         pkgs.glxinfo
         pkgs.libva-utils
         pkgs.glib
-      ]
-      # Debug tools for GPU passthrough testing
-      ++ [
-        pkgs.busybox
-        pkgs.devmem2
-        pkgs.pciutils
-        pkgs.usbutils
       ];
 
     # Set Ollama environment variables for all users
@@ -345,12 +338,6 @@ in
     }
   ];
 
-  # Blacklist the open-source gk20a driver to allow NVIDIA proprietary driver to bind
-  boot.blacklistedKernelModules = [
-    "gk20a"
-    "nouveau"
-  ];
-
   microvm = {
     # Optimize is disabled because when it is enabled, qemu is built without libusb
     optimize.enable = false;
@@ -390,7 +377,7 @@ in
         "-device"
         "vfio-platform,host=100000000.vm_cma_vram_p,mmio-base=0x100000000"
         "-device"
-        "vfio-platform,host=17000000.gpu,mmio-base=0x64000000"
+        "vfio-platform,host=17000000.gpu"
         "-device"
         "vfio-platform,host=13e00000.host1x_pt"
         "-device"
