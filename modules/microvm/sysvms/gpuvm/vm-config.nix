@@ -313,6 +313,12 @@ in
     # Note: virtiofs requires kernel config changes
   ];
 
+  # Blacklist drivers that would interfere with NVIDIA proprietary driver
+  boot.blacklistedKernelModules = [ "gk20a" "nouveau" "nvgpu" ];
+  
+  # Add kernel parameters to prevent driver binding
+  boot.kernelParams = [ "modprobe.blacklist=gk20a,nouveau,nvgpu" ];
+
   # Enable BPMP guest proxy for GPU VM
   boot.kernelPatches = [
     {
