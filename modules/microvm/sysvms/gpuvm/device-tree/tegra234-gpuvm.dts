@@ -126,8 +126,7 @@
 		// address translation here.
 		// To get the address of the devices run in the QEMU console: info mtree -f
 		//        From            To              Size
-		ranges = <0x00 0x090c0000 0x00 0x090c0000 0x00 0x00001000>,     // 0x090c0000-0000000090c0fff BPMP MMIO region
-		         <0x00 0x17000000 0x00 0x64000000 0x00 0x01000000>,     // 0x64000000-0000000064ffffff (prio 0, ramd): VFIO 17000000.gpu region 0
+		ranges = <0x00 0x17000000 0x00 0x64000000 0x00 0x01000000>,     // 0x64000000-0000000064ffffff (prio 0, ramd): VFIO 17000000.gpu region 0
 		         <0x00 0x18000000 0x00 0x65000000 0x00 0x01000000>,     // 0x65000000-0000000065ffffff (prio 0, ramd): VFIO 17000000.gpu region 1
 				 <0x00 0x03b41000 0x00 0x66000000 0x00 0x00001000>,     // 0x66000000-0000000066000fff (prio 0, ramd): VFIO 17000000.gpu region 2
 				 <0x00 0x03810000 0x00 0x80000000 0x00 0x00010000>,     // Dummmy address for fues
