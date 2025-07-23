@@ -21,12 +21,17 @@ let
     if config.hardware.deviceTree.package == config.boot.kernelPackages.kernel then
       # Kernel package - DTBs are in dtbs/nvidia/
       "${config.hardware.deviceTree.package}/dtbs/nvidia/${config.hardware.deviceTree.name}.dtb"
-    else if lib.hasPrefix "device-tree-overlays" config.hardware.deviceTree.package.name or false then
+    else if lib.hasPrefix "device-tree-overlays" (config.hardware.deviceTree.package.name or "") then
       # Device tree overlays package - look for the DTB without -nv suffix
       "${config.hardware.deviceTree.package}/${config.hardware.deviceTree.name}.dtb"
     else
-      # Other packages - assume DTB is at root with name as-is
-      "${config.hardware.deviceTree.package}/${config.hardware.deviceTree.name}";
+      # Other packages - ensure .dtb extension is present
+      let
+        basePath = "${config.hardware.deviceTree.package}/${config.hardware.deviceTree.name}";
+      in
+        if lib.hasSuffix ".dtb" config.hardware.deviceTree.name
+        then basePath
+        else "${basePath}.dtb";
 in
 {
   options.ghaf.hardware.aarch64.systemd-boot-dtb = {
@@ -34,8 +39,15 @@ in
   };
 
   config = mkIf cfg.enable {
+    # Add devicetree to bootspec with correct path including .dtb extension
+    # This fixes the systemd-boot activation error where bootspec contains path without .dtb
+    boot.bootspec.extensions."org.nixos.systemd-boot" = {
+      devicetree = dtbPath;
+    };
+
     boot.loader.systemd-boot = {
-      extraFiles."dtbs/${config.hardware.deviceTree.name}" = dtbPath;
+      # Ensure the extraFiles entry has .dtb extension to match the actual file
+      extraFiles."dtbs/${config.hardware.deviceTree.name}.dtb" = dtbPath;
 
       extraInstallCommands = ''
         # Find out the latest generation from loader.conf
