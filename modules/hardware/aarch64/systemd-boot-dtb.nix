@@ -29,9 +29,7 @@ let
       let
         basePath = "${config.hardware.deviceTree.package}/${config.hardware.deviceTree.name}";
       in
-        if lib.hasSuffix ".dtb" config.hardware.deviceTree.name
-        then basePath
-        else "${basePath}.dtb";
+      if lib.hasSuffix ".dtb" config.hardware.deviceTree.name then basePath else "${basePath}.dtb";
 in
 {
   options.ghaf.hardware.aarch64.systemd-boot-dtb = {

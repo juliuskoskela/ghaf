@@ -314,8 +314,12 @@ in
   ];
 
   # Blacklist drivers that would interfere with NVIDIA proprietary driver
-  boot.blacklistedKernelModules = [ "gk20a" "nouveau" "nvgpu" ];
-  
+  boot.blacklistedKernelModules = [
+    "gk20a"
+    "nouveau"
+    "nvgpu"
+  ];
+
   # Add kernel parameters to prevent driver binding
   boot.kernelParams = [ "modprobe.blacklist=gk20a,nouveau,nvgpu" ];
 
