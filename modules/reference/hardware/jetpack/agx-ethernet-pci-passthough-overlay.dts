@@ -1,5 +1,5 @@
 /*
- * Copyright 2022-2024 TII (SSRC) and the Ghaf contributors
+ * Copyright 2022-2025 TII (SSRC) and the Ghaf contributors
  * SPDX-License-Identifier: CC-BY-SA-4.0
  */
 
@@ -18,6 +18,27 @@
     compatible = "nvidia,p3701-0000";
 
     fragment@0 {
+        target-path = "/";
+        __overlay__ {
+            reserved-memory {
+                vm_cma_net: vm_cma_net@b0000000 {
+                    compatible = "removed-dma-pool";
+                    reg = <0x0 0xb0000000 0x0 0x10000000>;
+                    status = "okay";
+                };
+	    };
+
+	    vm_cma_net_p: vm_cma_net_p@b0000000 {
+                compatible = "nvidia,dummy";
+                iommus = <&smmu_niso0 TEGRA234_SID_PASSTHROUGH>;
+                reg = <0x0 0xb0000000 0x0 0x10000000>;
+                dma-coherent;
+                status = "okay";
+            };
+	};
+    };
+
+    fragment@1 {
         target-path = "/bus@0";
         __overlay__ {
             pcie@14100000 {
