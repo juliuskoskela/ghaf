@@ -98,6 +98,11 @@ in
         enable = true;
         server.endpoint = "https://loki.ghaflogs.vedenemo.dev/loki/api/v1/push";
         listener.address = config.ghaf.networking.hosts.admin-vm.ipv4;
+        categorization = {
+          enable = true;
+          # Using default security services: sshd, ssh, polkit, polkit-1, audit, auditd
+          # Using default security identifiers: sudo, audit, polkitd, sshd
+        };
       };
 
       # Disk encryption

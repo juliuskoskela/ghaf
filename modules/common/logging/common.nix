@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 { lib, ... }:
 let
-  inherit (lib) mkOption types;
+  inherit (lib) mkOption mkEnableOption types;
 in
 {
   # Creating logging configuration options needed across the host and vms
@@ -36,6 +36,55 @@ in
       '';
       type = types.port;
       default = 9999;
+    };
+
+    categorization = {
+      enable = mkEnableOption "log categorization to classify logs as security or system logs";
+
+      securityServices = mkOption {
+        description = ''
+          List of systemd service names (without .service suffix) that should
+          be categorized as security logs. These logs may have different
+          retention policies than system logs.
+        '';
+        type = types.listOf types.str;
+        default = [
+          "sshd"
+          "ssh" # Some distros use ssh.service instead of sshd.service
+          "polkit"
+          "polkit-1" # Common variant
+          "audit"
+          "auditd"
+        ];
+        example = [
+          "sshd"
+          "polkit"
+          "audit"
+          "custom-security-service"
+        ];
+      };
+
+      securityIdentifiers = mkOption {
+        description = ''
+          List of syslog identifiers that should be categorized as security logs.
+          These catch logs from programs that may not run as systemd services,
+          such as sudo commands or kernel audit events.
+        '';
+        type = types.listOf types.str;
+        default = [
+          "sudo"
+          "audit"
+          "polkitd"
+          "sshd"
+        ];
+        example = [
+          "sudo"
+          "audit"
+          "polkitd"
+          "sshd"
+          "custom-identifier"
+        ];
+      };
     };
   };
 }

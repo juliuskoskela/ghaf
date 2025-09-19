@@ -14,7 +14,8 @@ let
     optionalString
     ;
   cfg = config.ghaf.logging.client;
-  inherit (config.ghaf.logging) listener;
+  inherit (config.ghaf.logging) listener categorization;
+  inherit (lib) concatStringsSep optionalString;
 in
 {
   options.ghaf.logging.client = {
@@ -83,6 +84,49 @@ in
             source_labels = ["__journal__systemd_unit"]
             target_label  = "service_name"
           }
+          # Fallback: if service_name is empty, use syslog identifier
+          rule {
+            source_labels = ["service_name","__journal__syslog_identifier"]
+            regex         = "^$;(.*)"
+            target_label  = "service_name"
+            replacement   = "$1"
+            separator     = ";"
+          }
+          ${optionalString categorization.enable ''
+            # Log categorization rules (order matters!)
+
+            # 1) Match systemd units (anchored regex)
+            rule {
+              source_labels = ["__journal__systemd_unit"]
+              regex         = "^(${concatStringsSep "|" categorization.securityServices})\.service$"
+              target_label  = "log_category"
+              replacement   = "security"
+            }
+
+            # 2) Match templated sshd units (e.g., sshd@foo.service)
+            rule {
+              source_labels = ["__journal__systemd_unit"]
+              regex         = "^sshd@.+\.service$"
+              target_label  = "log_category"
+              replacement   = "security"
+            }
+
+            # 3) Match syslog identifiers (case-insensitive for robustness)
+            rule {
+              source_labels = ["__journal__syslog_identifier"]
+              regex         = "(?i)^(${concatStringsSep "|" categorization.securityIdentifiers})$"
+              target_label  = "log_category"
+              replacement   = "security"
+            }
+
+            # 4) Default to "system" ONLY if log_category is not already set
+            rule {
+              source_labels = ["log_category"]
+              regex         = "^$"  # Only matches empty label
+              target_label  = "log_category"
+              replacement   = "system"
+            }
+          ''}
         }
 
         loki.source.journal "journal" {
