@@ -7,6 +7,8 @@
 }:
 let
   cfg = config.ghaf.logging.server;
+  inherit (config.ghaf.logging) categorization;
+  inherit (lib) concatStringsSep optionalString;
 in
 {
   options.ghaf.logging.server = {
@@ -67,6 +69,49 @@ in
             source_labels = ["__journal__systemd_unit"]
             target_label  = "service_name"
           }
+          # Fallback: if service_name is empty, use syslog identifier
+          rule {
+            source_labels = ["service_name","__journal__syslog_identifier"]
+            regex         = "^$;(.*)"
+            target_label  = "service_name"
+            replacement   = "$1"
+            separator     = ";"
+          }
+          ${optionalString categorization.enable ''
+            # Log categorization rules for admin VM's own logs (same as client)
+
+            # 1) Match systemd units (anchored regex)
+            rule {
+              source_labels = ["__journal__systemd_unit"]
+              regex         = "^(${concatStringsSep "|" categorization.securityServices})\.service$"
+              target_label  = "log_category"
+              replacement   = "security"
+            }
+
+            # 2) Match templated sshd units
+            rule {
+              source_labels = ["__journal__systemd_unit"]
+              regex         = "^sshd@.+\.service$"
+              target_label  = "log_category"
+              replacement   = "security"
+            }
+
+            # 3) Match syslog identifiers (case-insensitive)
+            rule {
+              source_labels = ["__journal__syslog_identifier"]
+              regex         = "(?i)^(${concatStringsSep "|" categorization.securityIdentifiers})$"
+              target_label  = "log_category"
+              replacement   = "security"
+            }
+
+            # 4) Default to "system" only if empty
+            rule {
+              source_labels = ["log_category"]
+              regex         = "^$"
+              target_label  = "log_category"
+              replacement   = "system"
+            }
+          ''}
         }
 
         loki.process "system" {
