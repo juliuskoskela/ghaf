@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 {
   imports = [
-    ./common.nix
-    ./client.nix
-    ./server.nix
+    ./options.nix
+    ./client
+    ./server
   ];
 }

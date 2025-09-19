@@ -133,8 +133,7 @@ let
               };
             };
 
-            # Logging
-            logging.client.enable = config.ghaf.logging.enable;
+            logging.client = true;
 
             # Services
             services = {
