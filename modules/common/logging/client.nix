@@ -44,7 +44,7 @@ in
             source_labels = ["__journal__systemd_unit"]
             target_label  = "service_name"
           }
-          # Fallback: if service_name is empty, use syslog identifier
+          // Fallback: if service_name is empty, use syslog identifier
           rule {
             source_labels = ["service_name","__journal__syslog_identifier"]
             regex         = "^$;(.*)"
@@ -53,9 +53,9 @@ in
             separator     = ";"
           }
           ${optionalString categorization.enable ''
-            # Log categorization rules (order matters!)
+            // Log categorization rules (order matters!)
 
-            # 1) Match systemd units (anchored regex)
+            // 1) Match systemd units (anchored regex)
             rule {
               source_labels = ["__journal__systemd_unit"]
               regex         = "^(${concatStringsSep "|" categorization.securityServices})\.service$"
@@ -63,7 +63,7 @@ in
               replacement   = "security"
             }
 
-            # 2) Match templated sshd units (e.g., sshd@foo.service)
+            // 2) Match templated sshd units (e.g., sshd@foo.service)
             rule {
               source_labels = ["__journal__systemd_unit"]
               regex         = "^sshd@.+\.service$"
@@ -71,7 +71,7 @@ in
               replacement   = "security"
             }
 
-            # 3) Match syslog identifiers (case-insensitive for robustness)
+            // 3) Match syslog identifiers (case-insensitive for robustness)
             rule {
               source_labels = ["__journal__syslog_identifier"]
               regex         = "(?i)^(${concatStringsSep "|" categorization.securityIdentifiers})$"
@@ -79,10 +79,10 @@ in
               replacement   = "security"
             }
 
-            # 4) Default to "system" ONLY if log_category is not already set
+            // 4) Default to "system" ONLY if log_category is not already set
             rule {
               source_labels = ["log_category"]
-              regex         = "^$"  # Only matches empty label
+              regex         = "^$"  // Only matches empty label
               target_label  = "log_category"
               replacement   = "system"
             }
