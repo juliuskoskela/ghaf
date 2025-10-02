@@ -173,7 +173,7 @@ in
             // 1) Match systemd units (anchored regex)
             rule {
               source_labels = ["__journal__systemd_unit"]
-              regex         = "^(${concatStringsSep "|" categorization.securityServices})\.service$"
+              regex         = "^(${concatStringsSep "|" categorization.securityServices})\\.service$"
               target_label  = "log_category"
               replacement   = "security"
             }
@@ -181,7 +181,7 @@ in
             // 2) Match templated sshd units
             rule {
               source_labels = ["__journal__systemd_unit"]
-              regex         = "^sshd@.+\.service$"
+              regex         = "^sshd@.+\\.service$"
               target_label  = "log_category"
               replacement   = "security"
             }
@@ -209,6 +209,25 @@ in
           stage.drop {
             expression = "(GatewayAuthenticator::login|Gateway login succeeded|csd-wrapper|nmcli)"
           }
+          ${optionalString categorization.enable ''
+            // Server-side categorization for API-ingested (and any) logs
+            // Default everything to system first
+            stage.static_labels {
+              values = { log_category = "system" }
+            }
+
+            // Security: exact service names from your option list
+            stage.match {
+              selector = "{service_name=~\"^(${concatStringsSep "|" categorization.securityServices})$\"}"
+              stage.static_labels { values = { log_category = "security" } }
+            }
+
+            // Security: templated sshd@... units
+            stage.match {
+              selector = "{service_name=~\"^sshd@.+$\"}"
+              stage.static_labels { values = { log_category = "security" } }
+            }
+          ''}
         }
 
         loki.source.journal "journal" {
@@ -295,6 +314,9 @@ in
         CAfile = cfg.tls.caFile;
       };
     };
+
+    # Add alloy service user to systemd-journal group to read journal logs
+    systemd.services.alloy.serviceConfig.SupplementaryGroups = [ "systemd-journal" ];
 
     ghaf.firewall = {
       allowedTCPPorts = [ config.ghaf.logging.listener.port ];

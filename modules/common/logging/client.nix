@@ -98,7 +98,7 @@ in
             // 1) Match systemd units (anchored regex)
             rule {
               source_labels = ["__journal__systemd_unit"]
-              regex         = "^(${concatStringsSep "|" categorization.securityServices})\.service$"
+              regex         = "^(${concatStringsSep "|" categorization.securityServices})\\.service$"
               target_label  = "log_category"
               replacement   = "security"
             }
@@ -106,7 +106,7 @@ in
             // 2) Match templated sshd units (e.g., sshd@foo.service)
             rule {
               source_labels = ["__journal__systemd_unit"]
-              regex         = "^sshd@.+\.service$"
+              regex         = "^sshd@.+\\.service$"
               target_label  = "log_category"
               replacement   = "security"
             }
