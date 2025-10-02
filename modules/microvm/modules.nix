@@ -107,6 +107,7 @@ let
     logging = {
       config.ghaf.logging = {
         inherit (configHost.ghaf.logging) enable;
+        inherit (configHost.ghaf.logging) categorization;
         listener = {
           inherit (configHost.ghaf.logging.listener) address;
         };
