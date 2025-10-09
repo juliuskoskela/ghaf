@@ -93,15 +93,40 @@ in
         };
       };
 
-      # Enable logging
+      # Enable logging with local Loki, retention, and external sync
       logging = {
         enable = true;
-        server.endpoint = "https://loki.ghaflogs.vedenemo.dev/loki/api/v1/push";
         listener.address = config.ghaf.networking.hosts.admin-vm.ipv4;
+
+        # Enable log categorization
         categorization = {
           enable = true;
           # Using default security services: sshd, ssh, polkit, polkit-1, audit, auditd
           # Using default security identifiers: sudo, audit, polkitd, sshd
+        };
+
+        # Enable local Loki instance with retention policies
+        loki = {
+          enable = true;
+          retention = {
+            enable = true;
+            # Security logs retained for 90 days (compliance requirement)
+            # System logs retained for 30 days (troubleshooting)
+            categoryPeriods = {
+              security = "2160h"; # 90 days
+              system = "720h"; # 30 days
+            };
+          };
+        };
+
+        # Forward logs to external server for company-wide monitoring
+        server.externalEndpoint = "https://loki.ghaflogs.vedenemo.dev/loki/api/v1/push";
+
+        # Enable local retention on hosts and VMs
+        localRetention = {
+          enable = true;
+          maxRetentionDays = 1; # Minimize storage on edge devices
+          maxDiskUsage = "500M"; # Limit journal size
         };
       };
 

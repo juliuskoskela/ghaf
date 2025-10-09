@@ -86,5 +86,29 @@ in
         ];
       };
     };
+
+    localRetention = {
+      enable = mkEnableOption "local log retention policies on hosts and VMs using systemd journal";
+
+      maxRetentionDays = mkOption {
+        description = ''
+          Maximum number of days to retain journal logs locally on hosts and non-admin VMs.
+          This helps minimize storage usage on edge devices.
+        '';
+        type = types.int;
+        default = 1;
+        example = 7;
+      };
+
+      maxDiskUsage = mkOption {
+        description = ''
+          Maximum disk space that journal logs can use (e.g., "500M", "1G").
+          Journal will automatically delete old logs when this limit is reached.
+        '';
+        type = types.str;
+        default = "500M";
+        example = "1G";
+      };
+    };
   };
 }

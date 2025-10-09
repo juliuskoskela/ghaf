@@ -14,8 +14,8 @@ let
     optionalString
     ;
   cfg = config.ghaf.logging.client;
-  inherit (config.ghaf.logging) listener categorization;
-  inherit (lib) concatStringsSep optionalString;
+  inherit (config.ghaf.logging) listener categorization localRetention;
+  inherit (lib) concatStringsSep optionalString mkIf;
 in
 {
   options.ghaf.logging.client = {
@@ -172,5 +172,20 @@ in
     ghaf.security.audit.extraRules = [
       "-w /etc/alloy/client.alloy -p rwxa -k alloy_client_config"
     ];
+
+    # Configure local journal retention to minimize storage on edge devices
+    services.journald.extraConfig = mkIf localRetention.enable ''
+      # Retention by time
+      MaxRetentionSec=${toString (localRetention.maxRetentionDays * 86400)}
+
+      # Retention by disk usage
+      SystemMaxUse=${localRetention.maxDiskUsage}
+
+      # Keep journal files from being too large
+      SystemMaxFileSize=100M
+
+      # Ensure journal is stored persistently (required for time-based retention)
+      Storage=persistent
+    '';
   };
 }

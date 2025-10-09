@@ -16,8 +16,8 @@ let
     ;
   inherit (lib.strings) hasPrefix;
   cfg = config.ghaf.logging.server;
-  inherit (config.ghaf.logging) categorization;
-  inherit (lib) concatStringsSep optionalString;
+  inherit (config.ghaf.logging) categorization localRetention;
+  inherit (lib) concatStringsSep optionalString mkIf;
 in
 {
   options.ghaf.logging.server = {
@@ -27,9 +27,27 @@ in
         Assign endpoint url value to the alloy.service running in
         admin-vm. This endpoint URL will include protocol, upstream
         address along with port value.
+
+        If ghaf.logging.loki.enable is true, this defaults to the local
+        Loki instance. Otherwise, it must be explicitly set.
+      '';
+      type = lib.types.nullOr lib.types.str;
+      default =
+        if config.ghaf.logging.loki.enable then
+          "http://${config.ghaf.logging.loki.listenAddress}:${toString config.ghaf.logging.loki.listenPort}/loki/api/v1/push"
+        else
+          null;
+    };
+    externalEndpoint = lib.mkOption {
+      description = ''
+        Optional external endpoint for forwarding logs to a centralized
+        logging server (e.g., company infrastructure) in addition to the
+        local Loki instance. When both local Loki and external endpoint
+        are configured, logs are sent to both destinations (dual-write).
       '';
       type = types.nullOr types.str;
       default = null;
+      example = "https://loki.ghaflogs.vedenemo.dev/loki/api/v1/push";
     };
     identifierFilePath = mkOption {
       description = ''
@@ -205,7 +223,10 @@ in
         }
 
         loki.process "system" {
-          forward_to = [loki.write.remote.receiver]
+          forward_to = [
+            loki.write.local.receiver,
+            ${optionalString (cfg.externalEndpoint != null) "loki.write.external.receiver,"}
+          ]
           stage.drop {
             expression = "(GatewayAuthenticator::login|Gateway login succeeded|csd-wrapper|nmcli)"
           }
@@ -233,24 +254,30 @@ in
         loki.source.journal "journal" {
           path          = "/var/log/journal"
           relabel_rules = discovery.relabel.adminJournal.rules
-          forward_to    = [loki.write.remote.receiver]
+          forward_to    = [
+            loki.write.local.receiver,
+            ${optionalString (cfg.externalEndpoint != null) "loki.write.external.receiver,"}
+          ]
         }
 
-        loki.write "remote" {
+        // Primary endpoint (local or external)
+        loki.write "local" {
           endpoint {
             url = "${cfg.endpoint}"
-            // TODO: To be replaced with stronger authentication method
-            basic_auth {
-              username = "ghaf"
-              password_file = "/etc/loki/pass"
-            }
-            tls_config {
-              ${optionalString (cfg.tls.remoteCAFile != null) ''ca_pem = local.file.remote_ca.content''}
-              cert_pem    = local.file.tls_cert.content
-              key_pem     = local.file.tls_key.content
-              min_version = "${cfg.tls.minVersion}"
-              ${optionalString (cfg.tls.serverName != null) ''server_name = "${cfg.tls.serverName}"''}
-            }
+            ${optionalString (hasPrefix "https://" cfg.endpoint) ''
+              // For HTTPS endpoints, use mTLS
+              basic_auth {
+                username = "ghaf"
+                password_file = "/etc/loki/pass"
+              }
+              tls_config {
+                ${optionalString (cfg.tls.remoteCAFile != null) ''ca_pem = local.file.remote_ca.content''}
+                cert_pem    = local.file.tls_cert.content
+                key_pem     = local.file.tls_key.content
+                min_version = "${cfg.tls.minVersion}"
+                ${optionalString (cfg.tls.serverName != null) ''server_name = "${cfg.tls.serverName}"''}
+              }
+            ''}
           }
           // Write Ahead Log records incoming data and stores it on the local file
           // system in order to guarantee persistence of acknowledged data.
@@ -261,6 +288,34 @@ in
           }
           external_labels = { machine = local.file.macAddress.content }
         }
+
+        ${optionalString (cfg.externalEndpoint != null) ''
+          // External endpoint for centralized monitoring
+          loki.write "external" {
+            endpoint {
+              url = "${cfg.externalEndpoint}"
+              // TODO: To be replaced with stronger authentication method
+              basic_auth {
+                username = "ghaf"
+                password_file = "/etc/loki/pass"
+              }
+              tls_config {
+                ${optionalString (cfg.tls.remoteCAFile != null) ''ca_pem = local.file.remote_ca.content''}
+                cert_pem    = local.file.tls_cert.content
+                key_pem     = local.file.tls_key.content
+                min_version = "${cfg.tls.minVersion}"
+                ${optionalString (cfg.tls.serverName != null) ''server_name = "${cfg.tls.serverName}"''}
+              }
+            }
+            // Separate WAL for external endpoint
+            wal {
+              enabled = true
+              max_segment_age = "240h"
+              drain_timeout = "4s"
+            }
+            external_labels = { machine = local.file.macAddress.content }
+          }
+        ''}
 
         loki.source.api "listener" {
           http {
@@ -326,5 +381,22 @@ in
     ghaf.security.audit.extraRules = [
       "-w /etc/alloy/logs-aggregator.alloy -p rwxa -k alloy_client_config"
     ];
+
+    # Configure local journal retention on admin-vm if enabled
+    # Note: Admin-vm typically doesn't need aggressive retention since
+    # it has Loki for long-term storage, but this can be enabled if desired
+    services.journald.extraConfig = mkIf localRetention.enable ''
+      # Retention by time
+      MaxRetentionSec=${toString (localRetention.maxRetentionDays * 86400)}
+
+      # Retention by disk usage
+      SystemMaxUse=${localRetention.maxDiskUsage}
+
+      # Keep journal files from being too large
+      SystemMaxFileSize=100M
+
+      # Ensure journal is stored persistently (required for time-based retention)
+      Storage=persistent
+    '';
   };
 }
