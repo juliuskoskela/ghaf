@@ -12,10 +12,10 @@ let
     mkOption
     types
     optionalString
+    concatStringsSep
     ;
   cfg = config.ghaf.logging.client;
   inherit (config.ghaf.logging) listener categorization localRetention;
-  inherit (lib) concatStringsSep optionalString mkIf;
 in
 {
   options.ghaf.logging.client = {

@@ -13,11 +13,11 @@ let
     types
     optionalString
     optionals
+    concatStringsSep
     ;
   inherit (lib.strings) hasPrefix;
   cfg = config.ghaf.logging.server;
   inherit (config.ghaf.logging) categorization localRetention;
-  inherit (lib) concatStringsSep optionalString mkIf;
 in
 {
   options.ghaf.logging.server = {
@@ -129,8 +129,13 @@ in
         message = "Please set ghaf.logging.server.tls.certFile and tls.keyFile.";
       }
       {
-        assertion = hasPrefix "https://" (cfg.endpoint or "");
-        message = "Endpoint must start with https://";
+        # Allow http:// only for localhost (local Loki), require https:// for external endpoints
+        assertion =
+          cfg.endpoint == null
+          || hasPrefix "https://" cfg.endpoint
+          || hasPrefix "http://127.0.0.1" cfg.endpoint
+          || hasPrefix "http://localhost" cfg.endpoint;
+        message = "External endpoints must use https:// (only http://127.0.0.1 or http://localhost allowed for local Loki)";
       }
       {
         assertion = cfg.tls.terminator.backendPort != config.ghaf.logging.listener.port;
@@ -150,11 +155,11 @@ in
         }
 
         // TLS materials arrive via systemd credentials
-        local.file "tls_cert" { 
-          filename = sys.env("CREDENTIALS_DIRECTORY") + "/loki_cert" 
+        local.file "tls_cert" {
+          filename = sys.env("CREDENTIALS_DIRECTORY") + "/loki_cert"
         }
-        local.file "tls_key" { 
-          filename = sys.env("CREDENTIALS_DIRECTORY") + "/loki_key" 
+        local.file "tls_key" {
+          filename = sys.env("CREDENTIALS_DIRECTORY") + "/loki_key"
         }
         ${optionalString (cfg.tls.remoteCAFile != null) ''
           local.file "remote_ca" {
@@ -162,8 +167,8 @@ in
           }
         ''}
         ${optionalString (cfg.tls.caFile != null) ''
-          local.file "tls_ca" { 
-            filename = sys.env("CREDENTIALS_DIRECTORY") + "/loki_ca" 
+          local.file "tls_ca" {
+            filename = sys.env("CREDENTIALS_DIRECTORY") + "/loki_ca"
           }
         ''}
 
