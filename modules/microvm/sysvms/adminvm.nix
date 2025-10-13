@@ -72,7 +72,7 @@ let
 
             # Services
             # Enable logging server on admin-vm
-            logging.server = true;
+            logging.server = config.ghaf.logging.enable;
 
             security.fail2ban.enable = configHost.ghaf.development.ssh.daemon.enable;
 
