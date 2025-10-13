@@ -35,7 +35,7 @@ in
       logging = {
         enable = true;
         categorization.enable = true;
-        debug = true;
+        debug.enable = true;
       };
     };
   };

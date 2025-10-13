@@ -15,10 +15,12 @@
       Enable this on admin-vm only.
     '';
 
-    debug = mkEnableOption ''
-      Include debugging tools and test scripts.
-      Adds logging-server-tests command on admin-vm.
-    '';
+    debug = {
+      enable = mkEnableOption ''
+        Include debugging tools and test scripts.
+        Adds logging-server-tests on admin-vm and logging-client-tests on clients.
+      '';
+    };
 
     listener = {
       address = mkOption {
