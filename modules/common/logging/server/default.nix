@@ -5,5 +5,6 @@
     ./config.nix
     ./alloy.nix
     ./loki.nix
+    ./debug.nix
   ];
 }
