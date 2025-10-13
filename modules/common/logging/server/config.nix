@@ -9,33 +9,6 @@ in
     # Password file for basic auth
     environment.etc."loki/pass".text = "ghaf";
 
-    # Enable Alloy service
-    services.alloy = {
-      enable = true;
-      configPath = "/etc/alloy/config.alloy";
-    };
-
-    # Systemd service configuration
-    systemd.services.alloy.serviceConfig = {
-      # Load TLS credentials
-      LoadCredential = [
-        "loki_cert:${cfg.tls.certFile}"
-        "loki_key:${cfg.tls.keyFile}"
-      ]
-      ++ lib.optionals (cfg.tls.remoteCAFile != null) [
-        "remote_ca:${cfg.tls.remoteCAFile}"
-      ]
-      ++ lib.optionals (cfg.tls.caFile != null) [
-        "loki_ca:${cfg.tls.caFile}"
-      ];
-
-      # Allow reading journal
-      SupplementaryGroups = [ "systemd-journal" ];
-
-      # Quick shutdown
-      TimeoutStopSec = 4;
-    };
-
     # TLS terminator (stunnel) - accepts mTLS from clients
     services.stunnel = {
       enable = true;
