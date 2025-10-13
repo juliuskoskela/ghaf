@@ -107,12 +107,8 @@ let
     logging = {
       config.ghaf.logging = {
         inherit (configHost.ghaf.logging) enable;
-        inherit (configHost.ghaf.logging) categorization;
         listener = {
-          inherit (configHost.ghaf.logging.listener) address;
-        };
-        server = {
-          inherit (configHost.ghaf.logging.server) endpoint;
+          inherit (configHost.ghaf.logging.listener) address port;
         };
       };
     };
