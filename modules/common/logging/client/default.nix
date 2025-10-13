@@ -4,5 +4,6 @@
   imports = [
     ./config.nix
     ./alloy.nix
+    ./debug.nix
   ];
 }

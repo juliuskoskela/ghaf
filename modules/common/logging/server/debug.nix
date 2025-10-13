@@ -134,14 +134,14 @@ let
       # 4. Loki API Health
       section "Loki API Health"
 
-      READY=$(curl -s http://${cfg.local.listenAddress}:${toString cfg.local.listenPort}/ready || echo "failed")
+      READY=$(curl -s --max-time 5 http://${cfg.local.listenAddress}:${toString cfg.local.listenPort}/ready 2>/dev/null || echo "failed")
       if [ "$READY" = "ready" ]; then
         pass "Loki is ready"
       else
         fail "Loki not ready (got: $READY)"
       fi
 
-      METRICS=$(curl -s http://${cfg.local.listenAddress}:${toString cfg.local.listenPort}/metrics | grep -c "loki_" || echo "0")
+      METRICS=$(curl -s --max-time 5 http://${cfg.local.listenAddress}:${toString cfg.local.listenPort}/metrics 2>/dev/null | grep -c "loki_" || echo "0")
       if [ "$METRICS" -gt 0 ]; then
         pass "Loki metrics available ($METRICS metrics)"
       else
@@ -156,20 +156,20 @@ let
       NOW=$(date +%s)000000000
       FIVE_MIN_AGO=$(( $(date +%s) - 300 ))000000000
 
-      RESULT=$(curl -s -G "$QUERY_URL" \
+      RESULT=$(curl -s --max-time 10 -G "$QUERY_URL" \
         --data-urlencode "query={host=~\".+\"}" \
         --data-urlencode "start=$FIVE_MIN_AGO" \
         --data-urlencode "end=$NOW" \
-        --data-urlencode "limit=10" | jq -r '.status' 2>/dev/null || echo "failed")
+        --data-urlencode "limit=10" 2>/dev/null | jq -r '.status' 2>/dev/null || echo "failed")
 
       if [ "$RESULT" = "success" ]; then
         pass "Can query Loki successfully"
 
         # Count unique hosts
-        HOSTS=$(curl -s -G "$QUERY_URL" \
+        HOSTS=$(curl -s --max-time 10 -G "$QUERY_URL" \
           --data-urlencode "query={host=~\".+\"}" \
           --data-urlencode "start=$FIVE_MIN_AGO" \
-          --data-urlencode "end=$NOW" | \
+          --data-urlencode "end=$NOW" 2>/dev/null | \
           jq -r '.data.result[].stream.host' 2>/dev/null | sort -u | wc -l)
 
         if [ "$HOSTS" -gt 1 ]; then
@@ -187,16 +187,16 @@ let
       ${lib.optionalString cfg.categorization.enable ''
         section "Log Categorization"
 
-        SECURITY_LOGS=$(curl -s -G "$QUERY_URL" \
+        SECURITY_LOGS=$(curl -s --max-time 10 -G "$QUERY_URL" \
           --data-urlencode 'query={log_category="security"}' \
           --data-urlencode "start=$FIVE_MIN_AGO" \
-          --data-urlencode "end=$NOW" | \
+          --data-urlencode "end=$NOW" 2>/dev/null | \
           jq -r '.data.result | length' 2>/dev/null || echo "0")
 
-        SYSTEM_LOGS=$(curl -s -G "$QUERY_URL" \
+        SYSTEM_LOGS=$(curl -s --max-time 10 -G "$QUERY_URL" \
           --data-urlencode 'query={log_category="system"}' \
           --data-urlencode "start=$FIVE_MIN_AGO" \
-          --data-urlencode "end=$NOW" | \
+          --data-urlencode "end=$NOW" 2>/dev/null | \
           jq -r '.data.result | length' 2>/dev/null || echo "0")
 
         if [ "$SECURITY_LOGS" -gt 0 ]; then
@@ -216,7 +216,7 @@ let
       ${lib.optionalString cfg.local.retention.enable ''
         section "Retention Configuration"
 
-        COMPACTOR_RUNNING=$(curl -s http://${cfg.local.listenAddress}:${toString cfg.local.listenPort}/metrics | grep -c "loki_compactor_" || echo "0")
+        COMPACTOR_RUNNING=$(curl -s --max-time 5 http://${cfg.local.listenAddress}:${toString cfg.local.listenPort}/metrics 2>/dev/null | grep -c "loki_compactor_" || echo "0")
         if [ "$COMPACTOR_RUNNING" -gt 0 ]; then
           pass "Compactor is active"
         else
