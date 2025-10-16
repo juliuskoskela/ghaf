@@ -8,5 +8,6 @@
     ./input.nix
     ./kernel.nix
     ./qemu.nix
+    ./thunderbolt.nix
   ];
 }

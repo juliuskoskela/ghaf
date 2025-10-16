@@ -50,6 +50,7 @@ let
         ghaf = {
           reference.profiles.mvp-user-trial.enable = true;
           partitioning.disko.enable = true;
+          hardware.thunderbolt.enable = true;
         };
       }
     ]))
@@ -59,6 +60,7 @@ let
         ghaf = {
           reference.profiles.mvp-user-trial.enable = true;
           partitioning.disko.enable = true;
+          hardware.thunderbolt.enable = true;
         };
       }
     ]))
@@ -68,6 +70,7 @@ let
         ghaf = {
           reference.profiles.mvp-user-trial.enable = true;
           partitioning.disko.enable = true;
+          hardware.thunderbolt.enable = true;
         };
       }
     ]))
@@ -77,6 +80,7 @@ let
         ghaf = {
           reference.profiles.mvp-user-trial.enable = true;
           partitioning.disko.enable = true;
+          hardware.thunderbolt.enable = true;
         };
       }
     ]))
@@ -86,6 +90,7 @@ let
         ghaf = {
           reference.profiles.mvp-user-trial.enable = true;
           partitioning.disko.enable = true;
+          hardware.thunderbolt.enable = true;
           #profiles.graphics.compositor = "labwc";
 
           virtualization.microvm.guivm.extraModules = [
@@ -102,6 +107,10 @@ let
         ghaf = {
           reference.profiles.mvp-user-trial-extras.enable = true;
           partitioning.disko.enable = true;
+          # Enable Thunderbolt support for docks (e.g., Thunderbolt dock with ethernet)
+          # This allows Thunderbolt devices to be enumerated and authorized.
+          # USB ethernet adapters from docks are automatically passed to net-vm via vhotplug.
+          hardware.thunderbolt.enable = true;
         };
       }
     ]))
@@ -197,6 +206,7 @@ let
         ghaf = {
           reference.profiles.mvp-user-trial.enable = true;
           partitioning.disko.enable = true;
+          hardware.thunderbolt.enable = true;
         };
       }
     ]))
@@ -206,6 +216,7 @@ let
         ghaf = {
           reference.profiles.mvp-user-trial.enable = true;
           partitioning.disko.enable = true;
+          hardware.thunderbolt.enable = true;
         };
       }
     ]))
@@ -215,6 +226,7 @@ let
         ghaf = {
           reference.profiles.mvp-user-trial.enable = true;
           partitioning.disko.enable = true;
+          hardware.thunderbolt.enable = true;
         };
       }
     ]))
@@ -224,6 +236,7 @@ let
         ghaf = {
           reference.profiles.mvp-user-trial.enable = true;
           partitioning.disko.enable = true;
+          hardware.thunderbolt.enable = true;
         };
       }
     ]))
@@ -233,6 +246,10 @@ let
         ghaf = {
           reference.profiles.mvp-user-trial-extras.enable = true;
           partitioning.disko.enable = true;
+          # Enable Thunderbolt support for docks (e.g., Thunderbolt dock with ethernet)
+          # This allows Thunderbolt devices to be enumerated and authorized.
+          # USB ethernet adapters from docks are automatically passed to net-vm via vhotplug.
+          hardware.thunderbolt.enable = true;
         };
       }
     ]))
