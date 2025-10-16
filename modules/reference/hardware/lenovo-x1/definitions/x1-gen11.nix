@@ -37,6 +37,13 @@
       productId = "51f1";
       name = "wlp0s5f0";
     }
+    {
+      # Passthrough Thunderbolt Ethernet (I225-LMvP)
+      path = "0000:79:00.0";
+      vendorId = "8086";
+      productId = "5502";
+      name = "eththunderbolt0";
+    }
   ];
 
   gpu = {
