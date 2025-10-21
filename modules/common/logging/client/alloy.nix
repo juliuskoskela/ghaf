@@ -57,7 +57,7 @@ let
 
       // Only add hostname label
       external_labels = {
-        hostname = env("HOSTNAME"),
+        hostname = sys.env("HOSTNAME"),
       }
     }
   '';
