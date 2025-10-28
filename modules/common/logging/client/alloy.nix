@@ -62,17 +62,17 @@ let
     }
   '';
 
+  # Alloy configuration file in store
+  alloyConfigFile = pkgs.writeText "alloy-client-config.alloy" alloyConfig;
+
   # Check to validate Alloy configuration at build time
   alloyConfigCheck =
-    let
-      testConfigFile = pkgs.writeText "test-alloy-client-config.alloy" alloyConfig;
-    in
     pkgs.runCommand "alloy-client-config-check"
       {
         nativeBuildInputs = [ pkgs.buildPackages.grafana-alloy ];
       }
       ''
-        alloy validate ${testConfigFile}
+        alloy validate ${alloyConfigFile}
         touch $out
       '';
 in
@@ -81,15 +81,13 @@ in
     # Ensure config is validated at build time
     system.checks = [ alloyConfigCheck ];
 
-    environment.etc."alloy/config.alloy" = {
-      text = alloyConfig;
-      mode = "0644";
-    };
+    # Symlink config to /etc for inspection
+    environment.etc."alloy/config.alloy".source = alloyConfigFile;
 
-    # Enable Alloy service
+    # Enable Alloy service with store path
     services.alloy = {
       enable = true;
-      configPath = "/etc/alloy/config.alloy";
+      configPath = "${alloyConfigFile}";
     };
 
     # Systemd service configuration

@@ -106,15 +106,7 @@ let
       path          = "/var/log/journal"
       relabel_rules = discovery.relabel.admin_journal.rules
       forward_to    = [
-        ${
-          let
-            items = filter (x: x != "") [
-              (optionalString cfg.local.enable "loki.write.local.receiver")
-              (optionalString cfg.remote.enable "loki.write.external.receiver")
-            ];
-          in
-          concatStringsSep ",\n        " items + (optionalString (items != [ ]) ",")
-        }
+        loki.process.incoming.receiver,
       ]
     }
 
@@ -130,7 +122,7 @@ let
               (optionalString cfg.remote.enable "loki.write.external.receiver")
             ];
           in
-          concatStringsSep ",\n        " items + (optionalString (items != [ ]) ",")
+          concatStringsSep ",\n        " items + (if items != [ ] then ",\n" else "")
         }
       ]
 
@@ -239,17 +231,17 @@ let
     ''}
   '';
 
+  # Alloy configuration file in store
+  alloyConfigFile = pkgs.writeText "alloy-server-config.alloy" alloyConfig;
+
   # Check to validate Alloy configuration at build time
   alloyConfigCheck =
-    let
-      testConfigFile = pkgs.writeText "test-alloy-server-config.alloy" alloyConfig;
-    in
     pkgs.runCommand "alloy-server-config-check"
       {
         nativeBuildInputs = [ pkgs.buildPackages.grafana-alloy ];
       }
       ''
-        alloy validate ${testConfigFile}
+        alloy validate ${alloyConfigFile}
         touch $out
       '';
 in
@@ -258,15 +250,13 @@ in
     # Ensure config is validated at build time
     system.checks = [ alloyConfigCheck ];
 
-    environment.etc."alloy/config.alloy" = {
-      text = alloyConfig;
-      mode = "0644";
-    };
+    # Symlink config to /etc for inspection
+    environment.etc."alloy/config.alloy".source = alloyConfigFile;
 
-    # Enable Alloy service
+    # Enable Alloy service with store path
     services.alloy = {
       enable = true;
-      configPath = "/etc/alloy/config.alloy";
+      configPath = "${alloyConfigFile}";
     };
 
     # Systemd service configuration

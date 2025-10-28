@@ -36,6 +36,18 @@ let
       };
     };
 
+    # Ingester config - reduce memory usage
+    ingester = {
+      chunk_idle_period = "15m";
+      chunk_block_size = 262144; # 256KB
+      chunk_target_size = 1048576; # 1MB (smaller chunks)
+      chunk_retain_period = "30s";
+      max_transfer_retries = 0;
+      wal = {
+        enabled = false; # Disable WAL to save memory
+      };
+    };
+
     schema_config = {
       configs = [
         {
@@ -62,17 +74,17 @@ let
     };
 
     # Compactor for retention
-    compactor = lib.mkIf cfg.local.retention.enable {
+    compactor = lib.optionalAttrs cfg.local.retention.enable {
       working_directory = "${cfg.local.dataDir}/compactor";
       compaction_interval = cfg.local.retention.compactionInterval;
       retention_enabled = true;
       retention_delete_delay = cfg.local.retention.deleteDelay;
-      retention_delete_worker_count = 150;
+      retention_delete_worker_count = 10; # Reduced from 150
       delete_request_store = "filesystem";
     };
 
-    # Retention policies
-    limits_config = lib.mkIf cfg.local.retention.enable {
+    # Retention policies and resource limits
+    limits_config = lib.optionalAttrs cfg.local.retention.enable {
       retention_period = cfg.local.retention.defaultPeriod;
 
       # Per-category retention
@@ -81,15 +93,25 @@ let
         priority = 1;
         inherit period;
       }) cfg.local.retention.categoryPeriods;
+
+      # Resource limits for lightweight deployment
+      max_query_parallelism = 4;
+      max_query_series = 500;
+      max_streams_per_user = 1000;
+      max_global_streams_per_user = 2000;
+      ingestion_rate_mb = 4;
+      ingestion_burst_size_mb = 8;
+      max_chunks_per_query = 2000000;
+      max_query_length = "721h"; # ~30 days
     };
 
-    # Query cache
+    # Query cache - reduced for low memory
     query_range = {
       results_cache = {
         cache = {
           embedded_cache = {
             enabled = true;
-            max_size_mb = 100;
+            max_size_mb = 32; # Reduced from 100
           };
         };
       };
@@ -108,6 +130,22 @@ in
     services.loki = {
       enable = true;
       configFile = lokiConfigFile;
+    };
+
+    # Resource limits for Loki service
+    systemd.services.loki.serviceConfig = {
+      # Limit memory to 256MB
+      MemoryMax = "256M";
+      MemoryHigh = "200M";
+
+      # Limit CPU to 50% of one core
+      CPUQuota = "50%";
+
+      # Lower priority
+      Nice = 10;
+
+      # OOM score (more likely to be killed under memory pressure)
+      OOMScoreAdjust = 500;
     };
 
     # Create data directories

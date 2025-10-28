@@ -94,7 +94,13 @@ in
       };
 
       # Enable logging
-      logging.enable = true;
+      logging = {
+        enable = true;
+        remote = {
+          enable = true;
+          endpoint = "https://loki.ghaflogs.vedenemo.dev/loki/api/v1/push";
+        };
+      };
 
       # Disk encryption
       storage.encryption.enable = false;

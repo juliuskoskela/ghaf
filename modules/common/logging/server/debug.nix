@@ -292,12 +292,12 @@ let
       section "Recent Service Logs"
 
       for service in alloy loki stunnel; do
-        ERRORS=$(journalctl -u $service.service --since "5 minutes ago" 2>/dev/null | grep -c -i "error\|fail" || echo "0")
+        ERRORS=$(journalctl -u $service.service --since "5 minutes ago" --no-pager 2>/dev/null | grep -c -i "error\|fail" || echo "0")
         if [ "$ERRORS" -eq 0 ]; then
           pass "$service: No recent errors"
         else
           warn "$service: Found $ERRORS error lines in last 5 minutes"
-          journalctl -u $service.service --since "5 minutes ago" | grep -i "error\|fail" | tail -3 | sed 's/^/    /'
+          journalctl -u $service.service --since "5 minutes ago" --no-pager | grep -i "error\|fail" | tail -3 | sed 's/^/    /'
         fi
       done
 
