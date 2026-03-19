@@ -70,7 +70,12 @@ let
 
       systemd-tmpfiles --create --prefix /var/log/journal
       systemctl restart systemd-journald.service
-      systemctl restart alloy.service
+
+      if systemctl cat alloy.service >/dev/null 2>&1; then
+        systemctl restart alloy.service
+      else
+        echo "alloy.service not installed, skipping restart"
+      fi
     '';
   };
 in
@@ -144,7 +149,9 @@ in
     };
 
     recovery = {
-      enable = mkEnableOption "journald/alloy recovery after realtime clock jumps";
+      enable = (mkEnableOption "journald/alloy recovery after realtime clock jumps") // {
+        default = true;
+      };
 
       thresholdSeconds = mkOption {
         description = "Only act on clock jumps >= this many seconds.";

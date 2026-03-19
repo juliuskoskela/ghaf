@@ -59,7 +59,7 @@
 # 4. Monitoring:
 #    - Audit rules monitor FSS key directory and journal access
 #    - AUDIT_LOG_VERIFY_COMPLETED: Successful verification
-#    - AUDIT_LOG_INTEGRITY_FAIL: Failed verification (potential tampering)
+#    - AUDIT_LOG_INTEGRITY_FAIL: Failed verification (integrity or corruption issue)
 #
 # 5. Troubleshooting:
 #    - Manual verification: journalctl --verify
@@ -85,6 +85,7 @@ let
   loggingEnabled = config.ghaf.logging.enable;
   fssBasePath =
     if config.ghaf.type == "host" then "/persist/common/journal-fss" else "/etc/common/journal-fss";
+  verifyClassifierLib = builtins.readFile ./fss-verify-classifier.sh;
 
   # Script to setup FSS keys on first boot
   setupScript = pkgs.writeShellApplication {
@@ -99,7 +100,42 @@ let
 
       KEY_DIR="${cfg.keyPath}"
       INIT_FILE="$KEY_DIR/initialized"
+      VERIFY_KEY_FILE="$KEY_DIR/verification-key"
       MACHINE_ID=$(cat /etc/machine-id)
+
+      clear_initialized_state() {
+        rm -f "$INIT_FILE"
+      }
+
+      ensure_verification_key_ready() {
+        local verify_key
+
+        if [ ! -f "$VERIFY_KEY_FILE" ]; then
+          echo "Error: FSS verification key missing at $VERIFY_KEY_FILE"
+          return 1
+        fi
+
+        if [ ! -s "$VERIFY_KEY_FILE" ]; then
+          echo "Error: FSS verification key is empty at $VERIFY_KEY_FILE"
+          return 1
+        fi
+
+        if [ ! -r "$VERIFY_KEY_FILE" ]; then
+          echo "Error: FSS verification key is unreadable at $VERIFY_KEY_FILE"
+          return 1
+        fi
+
+        verify_key=$(tr -d '[:space:]' < "$VERIFY_KEY_FILE")
+        case "$verify_key" in
+          */*) ;;
+          *)
+            echo "Error: FSS verification key is malformed at $VERIFY_KEY_FILE"
+            return 1
+            ;;
+        esac
+
+        chmod 0400 "$VERIFY_KEY_FILE"
+      }
 
       # Support both persistent and volatile storage
       FSS_KEY_FILE="/var/log/journal/$MACHINE_ID/fss"
@@ -121,7 +157,11 @@ let
       # Check if FSS keys already exist
       if [ -f "$FSS_KEY_FILE" ]; then
         echo "FSS sealing key already exists at $FSS_KEY_FILE"
-        echo "Setup already complete, creating sentinel file"
+        if ! ensure_verification_key_ready; then
+          clear_initialized_state
+          exit 1
+        fi
+        echo "Setup already complete, verification key present, creating sentinel file"
         touch "$INIT_FILE"
         chmod 0644 "$INIT_FILE"
         # Write config pointer so test scripts can discover KEY_DIR without hostname
@@ -138,6 +178,7 @@ let
 
       # Generate new FSS keys
       echo "Setting up Forward Secure Sealing keys..."
+      clear_initialized_state
       if ! journalctl --setup-keys --interval="${cfg.sealInterval}" > "$KEY_DIR/setup-output.txt" 2>&1; then
         echo "Error: journalctl --setup-keys failed"
         cat "$KEY_DIR/setup-output.txt"
@@ -165,7 +206,13 @@ let
 
       # Verify sealing key was created
       if [ ! -f "$FSS_KEY_FILE" ]; then
+        clear_initialized_state
         echo "Error: FSS key generation failed - key file not found at $FSS_KEY_FILE"
+        exit 1
+      fi
+
+      if ! ensure_verification_key_ready; then
+        clear_initialized_state
         exit 1
       fi
 
@@ -191,7 +238,7 @@ let
 
       echo "Forward Secure Sealing initialization complete"
       echo "Sealing key: $FSS_KEY_FILE"
-      echo "Verification key: $KEY_DIR/verification-key (if extracted)"
+      echo "Verification key: $VERIFY_KEY_FILE"
     '';
   };
 
@@ -204,97 +251,130 @@ let
       gnugrep
     ];
     text = ''
-      echo "Verifying journal integrity with Forward Secure Sealing..."
+            ${verifyClassifierLib}
 
-      # Check if any journals exist to verify
-      if ! journalctl --list-boots >/dev/null 2>&1; then
-        echo "No journals found to verify, skipping verification"
-        echo "This is normal on fresh boot before journals are created"
-        exit 0
-      fi
+            audit_log() {
+              local priority="$1"
+              local message="$2"
+              printf '%s\n' "$message" | systemd-cat -t journal-fss -p "$priority"
+            }
 
-      # Check if verification key exists and use it
-      VERIFY_KEY_FILE="${cfg.keyPath}/verification-key"
-      VERIFY_CMD="journalctl --verify"
-      if [ -f "$VERIFY_KEY_FILE" ] && [ -s "$VERIFY_KEY_FILE" ]; then
-        VERIFY_KEY=$(cat "$VERIFY_KEY_FILE")
-        VERIFY_CMD="journalctl --verify --verify-key=$VERIFY_KEY"
-        echo "Using verification key from $VERIFY_KEY_FILE"
-        # Diagnostic: Show key length for troubleshooting
-        KEY_LENGTH=$(echo -n "$VERIFY_KEY" | wc -c)
-        echo "Verification key length: $KEY_LENGTH bytes (expected: 30-40 bytes)"
-      else
-        echo "WARNING: No verification key found at $VERIFY_KEY_FILE"
-        echo "Running verification without key - sealed journals will fail verification"
-      fi
+            fss_log_info "Verifying journal integrity with Forward Secure Sealing..."
 
-      # Capture output and exit code
-      VERIFY_OUTPUT=$($VERIFY_CMD 2>&1) || VERIFY_EXIT=$?
-      VERIFY_EXIT=''${VERIFY_EXIT:-0}
+            # Check if any journals exist to verify
+            if ! journalctl --list-boots >/dev/null 2>&1; then
+              fss_log_info "No journals found to verify, skipping verification"
+              fss_log_info "This is normal on fresh boot before journals are created"
+              exit 0
+            fi
 
-      # Check for actual integrity failures (FAIL/Failed in output)
-      # Catches: "FAIL", "Failed to parse seed", "verification failed", etc.
-      if echo "$VERIFY_OUTPUT" | grep -qi "FAIL"; then
-        # Provide specific guidance for seed parsing failures
-        if echo "$VERIFY_OUTPUT" | grep -qi "parse.*seed"; then
-          echo "AUDIT_LOG_INTEGRITY_FAIL: FSS seed parsing failed - verification key is malformed or incomplete" | systemd-cat -t journal-fss -p crit
-          echo "Journal integrity verification: FAILED (seed parsing error)"
-          echo "Output: $VERIFY_OUTPUT"
-          echo ""
-          echo "This error indicates the verification key is incomplete or corrupted."
-          echo "The verification key should be 30-40 bytes and contain '/' separator."
-          echo ""
-          echo "To fix:"
-          echo "1. Reset FSS: rm ${cfg.keyPath}/initialized && rm /var/log/journal/*/fss"
-          echo "2. Reboot to regenerate keys with correct extraction"
-          echo "3. Backup the new verification key from ${cfg.keyPath}/verification-key"
-          exit 1
-        # Check if only user journals failed (not system journal)
-        # User journals may fail due to entries written before FSS initialization
-        elif echo "$VERIFY_OUTPUT" | grep -qi "FAIL:.*user-.*\.journal\|user-.*\.journal.*FAIL"; then
-          if ! echo "$VERIFY_OUTPUT" | grep -qi "FAIL:.*system\.journal\|system\.journal.*FAIL"; then
-            echo "WARNING: User journal verification failed but system journal OK" | systemd-cat -t journal-fss -p warning
-            echo "Journal integrity verification: PARTIAL (user journals failed, system journal OK)"
-            echo "Output: $VERIFY_OUTPUT"
-            echo ""
-            echo "User journal failures are typically caused by entries written before FSS initialization."
-            echo "This is expected during initial setup and does not indicate tampering."
-            # Continue without failing - system journal integrity is what matters
-          else
-            echo "AUDIT_LOG_INTEGRITY_FAIL: Journal integrity verification FAILED - potential tampering detected" | systemd-cat -t journal-fss -p crit
-            echo "Journal integrity verification: FAILED"
-            echo "Output: $VERIFY_OUTPUT"
-            echo "WARNING: Audit log integrity compromised - alert sent to central logging"
-            exit 1
-          fi
-        else
-          echo "AUDIT_LOG_INTEGRITY_FAIL: Journal integrity verification FAILED - potential tampering detected" | systemd-cat -t journal-fss -p crit
-          echo "Journal integrity verification: FAILED"
-          echo "Output: $VERIFY_OUTPUT"
-          echo "WARNING: Audit log integrity compromised - alert sent to central logging"
-          exit 1
-        fi
-      fi
+            # Check if verification key exists and use it
+            VERIFY_KEY_FILE="${cfg.keyPath}/verification-key"
+            if [ ! -f "$VERIFY_KEY_FILE" ] || [ ! -s "$VERIFY_KEY_FILE" ]; then
+              audit_log crit "AUDIT_LOG_INTEGRITY_FAIL: Journal verification key missing or empty [KEY_MISSING]"
+              fss_log_fail "Journal integrity verification: FAILED (verification key missing)"
+              fss_log_info "Expected verification key at $VERIFY_KEY_FILE"
+              exit 1
+            fi
 
-      # Check for permission/filesystem errors that don't indicate tampering
-      if echo "$VERIFY_OUTPUT" | grep -qi "read-only file system\|permission denied\|cannot create"; then
-        echo "WARNING: Journal verification encountered filesystem errors (not an integrity failure)" | systemd-cat -t journal-fss -p warning
-        echo "Journal integrity verification: SKIPPED (filesystem errors)"
-        echo "Output: $VERIFY_OUTPUT"
-        echo "Note: This may be due to security hardening restrictions, not actual tampering"
-        exit 0
-      fi
+            if [ ! -r "$VERIFY_KEY_FILE" ]; then
+              audit_log crit "AUDIT_LOG_INTEGRITY_FAIL: Journal verification key unreadable [KEY_MISSING]"
+              fss_log_fail "Journal integrity verification: FAILED (verification key unreadable)"
+              fss_log_info "Unable to read verification key at $VERIFY_KEY_FILE"
+              exit 1
+            fi
 
-      # If we got here with non-zero exit but no specific errors, treat as success with warning
-      if [ "$VERIFY_EXIT" -ne 0 ]; then
-        echo "Journal verification returned non-zero exit but no critical errors detected" | systemd-cat -t journal-fss -p warning
-        echo "Output: $VERIFY_OUTPUT"
-      fi
+            VERIFY_KEY=$(cat "$VERIFY_KEY_FILE")
+            fss_log_info "Using verification key from $VERIFY_KEY_FILE"
+            KEY_LENGTH=$(echo -n "$VERIFY_KEY" | wc -c)
+            fss_log_info "Verification key length: $KEY_LENGTH bytes"
 
-      # Success case
-      echo "AUDIT_LOG_VERIFY_COMPLETED: Journal integrity verification passed" | systemd-cat -t journal-fss -p info
-      echo "Journal integrity verification: PASSED"
-      exit 0
+            # Capture output and exit code
+            VERIFY_EXIT=0
+            if VERIFY_OUTPUT=$(journalctl --verify --verify-key="$VERIFY_KEY" 2>&1); then
+              VERIFY_EXIT=0
+            else
+              VERIFY_EXIT=$?
+            fi
+            fss_classify_verify_output "$VERIFY_OUTPUT"
+            VERIFY_TAGS=$(fss_classification_tags)
+
+            if [ "$FSS_KEY_PARSE_ERROR" -eq 1 ] || [ "$FSS_KEY_REQUIRED_ERROR" -eq 1 ]; then
+              audit_log crit "AUDIT_LOG_INTEGRITY_FAIL: Journal integrity verification FAILED [$VERIFY_TAGS]"
+              fss_log_fail "Journal integrity verification: FAILED (verification key defect)"
+              fss_log_block <<EOF
+      Output: $VERIFY_OUTPUT
+
+      This indicates the verification key is missing, malformed, or unreadable by journalctl.
+      The verification key should be non-empty and contain '/' separator.
+
+      To fix:
+      1. Reset FSS: rm ${cfg.keyPath}/initialized && rm /var/log/journal/*/fss
+      2. Reboot to regenerate keys with correct extraction
+      3. Backup the new verification key from ${cfg.keyPath}/verification-key
+      EOF
+              exit 1
+            fi
+
+            if [ -n "$FSS_ACTIVE_SYSTEM_FAILURES" ]; then
+              audit_log crit "AUDIT_LOG_INTEGRITY_FAIL: Journal integrity verification FAILED [$VERIFY_TAGS]"
+              fss_log_fail "Journal integrity verification: FAILED"
+              fss_log_block <<EOF
+      Output: $VERIFY_OUTPUT
+      WARNING: Active system journal integrity or corruption issue detected
+      EOF
+              exit 1
+            fi
+
+            if [ -n "$FSS_OTHER_FAILURES" ]; then
+              audit_log crit "AUDIT_LOG_INTEGRITY_FAIL: Journal integrity verification FAILED [$VERIFY_TAGS]"
+              fss_log_fail "Journal integrity verification: FAILED"
+              fss_log_block <<EOF
+      Output: $VERIFY_OUTPUT
+      WARNING: Unclassified journal verification failures detected
+      EOF
+              exit 1
+            fi
+
+            if [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ] || [ -n "$FSS_USER_FAILURES" ]; then
+              audit_log warning "WARNING: Journal integrity verification PARTIAL [$VERIFY_TAGS]"
+              fss_log_warn "Journal integrity verification: PARTIAL (archive/user journal failures only)"
+              fss_log_block <<EOF
+      Output: $VERIFY_OUTPUT
+
+      Archived and user journal failures can occur after FSS initialization or journal recovery.
+      Active system journal verification passed or did not report failures.
+      EOF
+              exit 0
+            fi
+
+            if [ -n "$FSS_TEMP_FAILURES" ]; then
+              fss_log_pass "Journal integrity verification: PASSED (temporary journal files ignored)"
+              fss_log_info "Ignored temp failures: $FSS_TEMP_FAILURES"
+              exit 0
+            fi
+
+            # Check for permission/filesystem errors that don't indicate tampering
+            if [ "$FSS_FILESYSTEM_RESTRICTION" -eq 1 ]; then
+              audit_log warning "WARNING: Journal verification encountered filesystem errors [$VERIFY_TAGS]"
+              fss_log_warn "Journal integrity verification: SKIPPED (filesystem errors)"
+              fss_log_block <<EOF
+      Output: $VERIFY_OUTPUT
+      Note: This may be due to security hardening restrictions, not actual tampering
+      EOF
+              exit 0
+            fi
+
+            # If we got here with non-zero exit but no specific errors, treat as success with warning
+            if [ "$VERIFY_EXIT" -ne 0 ]; then
+              audit_log warning "Journal verification returned non-zero exit but no critical errors detected [$VERIFY_TAGS]"
+              fss_log_info "Output: $VERIFY_OUTPUT"
+            fi
+
+            # Success case
+            audit_log info "AUDIT_LOG_VERIFY_COMPLETED: Journal integrity verification passed"
+            fss_log_pass "Journal integrity verification: PASSED"
+            exit 0
     '';
   };
 in
