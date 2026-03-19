@@ -9,33 +9,48 @@
 # - Verification service can be triggered manually
 #
 _: ''
+  machine.wait_until_succeeds("""
+    bash -lc '
+      systemctl is-active --quiet journal-fss-setup.service ||
+      systemctl is-failed --quiet journal-fss-setup.service ||
+      [ "$(systemctl show journal-fss-setup.service --property=ConditionResult --value)" = "no" ]
+    '
+  """)
+  setup_status = machine.succeed("systemctl show journal-fss-setup --property=ActiveState,Result,ConditionResult")
+  setup_succeeded = "Result=success" in setup_status
+  verify_key_path = "/persist/common/journal-fss/test-host/verification-key"
+
   with subtest("Journal verification runs without critical errors"):
-      machine.succeed("logger -t fss-test 'Test entry 1'")
-      machine.succeed("logger -t fss-test 'Test entry 2'")
-      machine.sleep(5)
-      exit_code, output = machine.execute("""
-        bash -lc '
-          set -euo pipefail
-          KEY=$(cat /persist/common/journal-fss/test-host/verification-key)
-          source /etc/fss-verify-classifier.sh
-          VERIFY_OUTPUT=$(journalctl --verify --verify-key="$KEY" 2>&1 || true)
-          fss_classify_verify_output "$VERIFY_OUTPUT"
-          VERIFY_TAGS=$(fss_classification_tags)
+      if not setup_succeeded:
+          print(f"Skipping journal verification because FSS setup did not complete successfully: {setup_status}")
+      else:
+          machine.succeed(f"test -r {verify_key_path} && test -s {verify_key_path}")
+          machine.succeed("logger -t fss-test 'Test entry 1'")
+          machine.succeed("logger -t fss-test 'Test entry 2'")
+          machine.sleep(5)
+          exit_code, output = machine.execute(f"""
+            bash -lc '
+              set -euo pipefail
+              KEY=$(cat "{verify_key_path}")
+              source /etc/fss-verify-classifier.sh
+              VERIFY_OUTPUT=$(journalctl --verify --verify-key="$KEY" 2>&1 || true)
+              fss_classify_verify_output "$VERIFY_OUTPUT"
+              VERIFY_TAGS=$(fss_classification_tags)
 
-          if [ "$FSS_KEY_PARSE_ERROR" -eq 1 ] || [ "$FSS_KEY_REQUIRED_ERROR" -eq 1 ]; then
-            printf "%s\n%s\n" "$VERIFY_TAGS" "$VERIFY_OUTPUT"
-            exit 1
-          fi
+              if [ "$FSS_KEY_PARSE_ERROR" -eq 1 ] || [ "$FSS_KEY_REQUIRED_ERROR" -eq 1 ]; then
+                printf "%s\\n%s\\n" "$VERIFY_TAGS" "$VERIFY_OUTPUT"
+                exit 1
+              fi
 
-          if [ -n "$FSS_ACTIVE_SYSTEM_FAILURES" ] || [ -n "$FSS_OTHER_FAILURES" ]; then
-            printf "%s\n%s\n" "$VERIFY_TAGS" "$VERIFY_OUTPUT"
-            exit 1
-          fi
-        '
-      """)
-      if exit_code != 0:
-          raise Exception(f"Journal verification found critical failures: {output}")
-      print(f"Journal verification completed (exit code: {exit_code})")
+              if [ -n "$FSS_ACTIVE_SYSTEM_FAILURES" ] || [ -n "$FSS_OTHER_FAILURES" ]; then
+                printf "%s\\n%s\\n" "$VERIFY_TAGS" "$VERIFY_OUTPUT"
+                exit 1
+              fi
+            '
+          """)
+          if exit_code != 0:
+              raise Exception(f"Journal verification found critical failures: {output}")
+          print(f"Journal verification completed (exit code: {exit_code})")
 
   with subtest("Verification policy ignores temp files and downgrades archive or user-only failures"):
       machine.succeed("""

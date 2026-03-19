@@ -100,7 +100,42 @@ let
 
       KEY_DIR="${cfg.keyPath}"
       INIT_FILE="$KEY_DIR/initialized"
+      VERIFY_KEY_FILE="$KEY_DIR/verification-key"
       MACHINE_ID=$(cat /etc/machine-id)
+
+      clear_initialized_state() {
+        rm -f "$INIT_FILE"
+      }
+
+      ensure_verification_key_ready() {
+        local verify_key
+
+        if [ ! -f "$VERIFY_KEY_FILE" ]; then
+          echo "Error: FSS verification key missing at $VERIFY_KEY_FILE"
+          return 1
+        fi
+
+        if [ ! -s "$VERIFY_KEY_FILE" ]; then
+          echo "Error: FSS verification key is empty at $VERIFY_KEY_FILE"
+          return 1
+        fi
+
+        if [ ! -r "$VERIFY_KEY_FILE" ]; then
+          echo "Error: FSS verification key is unreadable at $VERIFY_KEY_FILE"
+          return 1
+        fi
+
+        verify_key=$(tr -d '[:space:]' < "$VERIFY_KEY_FILE")
+        case "$verify_key" in
+          */*) ;;
+          *)
+            echo "Error: FSS verification key is malformed at $VERIFY_KEY_FILE"
+            return 1
+            ;;
+        esac
+
+        chmod 0400 "$VERIFY_KEY_FILE"
+      }
 
       # Support both persistent and volatile storage
       FSS_KEY_FILE="/var/log/journal/$MACHINE_ID/fss"
@@ -122,7 +157,11 @@ let
       # Check if FSS keys already exist
       if [ -f "$FSS_KEY_FILE" ]; then
         echo "FSS sealing key already exists at $FSS_KEY_FILE"
-        echo "Setup already complete, creating sentinel file"
+        if ! ensure_verification_key_ready; then
+          clear_initialized_state
+          exit 1
+        fi
+        echo "Setup already complete, verification key present, creating sentinel file"
         touch "$INIT_FILE"
         chmod 0644 "$INIT_FILE"
         # Write config pointer so test scripts can discover KEY_DIR without hostname
@@ -139,6 +178,7 @@ let
 
       # Generate new FSS keys
       echo "Setting up Forward Secure Sealing keys..."
+      clear_initialized_state
       if ! journalctl --setup-keys --interval="${cfg.sealInterval}" > "$KEY_DIR/setup-output.txt" 2>&1; then
         echo "Error: journalctl --setup-keys failed"
         cat "$KEY_DIR/setup-output.txt"
@@ -166,7 +206,13 @@ let
 
       # Verify sealing key was created
       if [ ! -f "$FSS_KEY_FILE" ]; then
+        clear_initialized_state
         echo "Error: FSS key generation failed - key file not found at $FSS_KEY_FILE"
+        exit 1
+      fi
+
+      if ! ensure_verification_key_ready; then
+        clear_initialized_state
         exit 1
       fi
 
@@ -192,7 +238,7 @@ let
 
       echo "Forward Secure Sealing initialization complete"
       echo "Sealing key: $FSS_KEY_FILE"
-      echo "Verification key: $KEY_DIR/verification-key (if extracted)"
+      echo "Verification key: $VERIFY_KEY_FILE"
     '';
   };
 
