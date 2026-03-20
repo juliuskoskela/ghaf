@@ -126,6 +126,22 @@ _: ''
           [ -n "$FSS_OTHER_FAILURES" ]
           [ -z "$FSS_TEMP_FAILURES" ]
 
+          mixed_sample=$(printf "%s\n" \
+            "FAIL: /var/log/journal/mid/system.journal (Bad message)" \
+            "FAIL: /var/log/journal/mid/system.journal (Bad message)" \
+            "FAIL: /var/log/journal/mid/system@0000000000000001-0000000000000002.journal (Bad message)" \
+            "FAIL: /var/log/journal/mid/user-1000@0000000000000001-0000000000000002.journal (Bad message)" \
+            "FAIL: /var/log/journal/mid/system@0000000000000001-0000000000000002.journal~ (Bad message)" \
+            "FAIL: /var/log/journal/mid/custom.journal (Bad message)")
+          unique_fail_paths=$(fss_unique_fail_paths_from_output "$mixed_sample")
+          [ "$(fss_count_nonempty_lines "$unique_fail_paths")" -eq 5 ]
+          [ "$(printf "%s\n" "$unique_fail_paths" | grep -c '^/var/log/journal/mid/system.journal$')" -eq 1 ]
+          [ "$(fss_failure_bucket_for_path "/var/log/journal/mid/system.journal")" = "active-system" ]
+          [ "$(fss_failure_bucket_for_path "/var/log/journal/mid/system@0000000000000001-0000000000000002.journal")" = "archived-system" ]
+          [ "$(fss_failure_bucket_for_path "/var/log/journal/mid/user-1000@0000000000000001-0000000000000002.journal")" = "user-journal" ]
+          [ "$(fss_failure_bucket_for_path "/var/log/journal/mid/system@0000000000000001-0000000000000002.journal~")" = "temp" ]
+          [ "$(fss_failure_bucket_for_path "/var/log/journal/mid/custom.journal")" = "other" ]
+
           key_sample=$(printf "%s\n" \
             "Failed to parse seed." \
             "FAIL: /var/log/journal/mid/system.journal (Required key not available)")
@@ -166,6 +182,24 @@ _: ''
           [ "$log_output" = "$expected_log_output" ]
         '
       """)
+
+  with subtest("Clock-jump recovery defaults are enabled"):
+      machine.succeed("systemctl list-unit-files ghaf-clock-jump-watcher.service")
+      machine.succeed("systemctl list-unit-files ghaf-journal-alloy-recover.service")
+      machine.wait_for_unit("ghaf-clock-jump-watcher.service")
+      watcher_status = machine.succeed("systemctl show ghaf-clock-jump-watcher.service --property=ActiveState,UnitFileState")
+      if "ActiveState=active" not in watcher_status or "UnitFileState=enabled" not in watcher_status:
+          raise Exception(f"Clock-jump watcher not enabled by default: {watcher_status}")
+      print(f"Clock-jump recovery watcher status: {watcher_status}")
+
+  with subtest("Clock-jump recovery tolerates missing alloy service"):
+      exit_code, output = machine.execute("systemctl start ghaf-journal-alloy-recover.service 2>&1")
+      if exit_code != 0:
+          raise Exception(f"Clock-jump recovery service failed without alloy: {output}")
+      recover_status = machine.succeed("systemctl show ghaf-journal-alloy-recover.service --property=Result,ExecMainStatus")
+      if "Result=success" not in recover_status:
+          raise Exception(f"Clock-jump recovery service did not complete successfully: {recover_status}")
+      print(f"Clock-jump recovery service completed successfully: {recover_status}")
 
   with subtest("Journal files are created"):
       mid = machine.succeed("cat /etc/machine-id").strip()

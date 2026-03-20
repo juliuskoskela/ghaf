@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2022-2026 TII (SSRC) and the Ghaf contributors
 # SPDX-License-Identifier: Apache-2.0
 # shellcheck shell=bash
-# shellcheck disable=SC2034
+# shellcheck disable=SC2034,SC2329
 
 # Shared helpers for classifying `journalctl --verify` output.
 
@@ -75,6 +75,67 @@ fss_append_line() {
   else
     printf '%s\n%s' "$current" "$line"
   fi
+}
+
+# shellcheck disable=SC2329
+fss_count_nonempty_lines() {
+  local text="$1"
+  local line
+  local count=0
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ -n "$line" ]; then
+      count=$((count + 1))
+    fi
+  done <<<"$text"
+
+  printf '%s' "$count"
+}
+
+# shellcheck disable=SC2329
+fss_failure_bucket_for_path() {
+  local failure_path="$1"
+
+  case "$failure_path" in
+  *.journal~)
+    printf '%s' "temp"
+    ;;
+  */system.journal)
+    printf '%s' "active-system"
+    ;;
+  */system@*.journal)
+    printf '%s' "archived-system"
+    ;;
+  */user-[0-9]*.journal)
+    printf '%s' "user-journal"
+    ;;
+  *)
+    printf '%s' "other"
+    ;;
+  esac
+}
+
+# shellcheck disable=SC2329
+fss_unique_fail_paths_from_output() {
+  local output="$1"
+  local line
+  local failure_path
+  local unique_paths=""
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+    FAIL:\ *)
+      failure_path="${line#FAIL: }"
+      failure_path="${failure_path%% *}"
+
+      if [ -n "$failure_path" ] && ! printf '%s\n' "$unique_paths" | grep -Fxq "$failure_path"; then
+        unique_paths=$(fss_append_line "$unique_paths" "$failure_path")
+      fi
+      ;;
+    esac
+  done <<<"$output"
+
+  printf '%s' "$unique_paths"
 }
 
 fss_reset_classification() {
