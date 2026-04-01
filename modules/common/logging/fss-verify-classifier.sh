@@ -77,6 +77,19 @@ fss_append_line() {
   fi
 }
 
+fss_append_unique_line() {
+  local current="$1"
+  local line="$2"
+
+  if [ -z "$line" ]; then
+    printf '%s' "$current"
+  elif printf '%s\n' "$current" | grep -Fxq "$line"; then
+    printf '%s' "$current"
+  else
+    fss_append_line "$current" "$line"
+  fi
+}
+
 # shellcheck disable=SC2329
 fss_count_nonempty_lines() {
   local text="$1"
@@ -138,6 +151,26 @@ fss_unique_fail_paths_from_output() {
   printf '%s' "$unique_paths"
 }
 
+fss_path_list_contains() {
+  local path_list="$1"
+  local needle="$2"
+
+  [ -n "$needle" ] && printf '%s\n' "$path_list" | grep -Fxq "$needle"
+}
+
+fss_merge_path_lists() {
+  local merged="$1"
+  local additions="$2"
+  local line
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "$line" ] || continue
+    merged=$(fss_append_unique_line "$merged" "$line")
+  done <<<"$additions"
+
+  printf '%s' "$merged"
+}
+
 # shellcheck disable=SC2329
 fss_read_recorded_pre_fss_archive() {
   local state_file="$1"
@@ -145,6 +178,22 @@ fss_read_recorded_pre_fss_archive() {
   if [ -r "$state_file" ] && [ -s "$state_file" ]; then
     tr -d '[:space:]' <"$state_file"
   fi
+}
+
+fss_read_recorded_archive_list() {
+  local state_file="$1"
+  local line
+  local archive_paths=""
+
+  if [ -r "$state_file" ] && [ -s "$state_file" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      line=$(printf '%s' "$line" | tr -d '[:space:]')
+      [ -n "$line" ] || continue
+      archive_paths=$(fss_append_unique_line "$archive_paths" "$line")
+    done <"$state_file"
+  fi
+
+  printf '%s' "$archive_paths"
 }
 
 # shellcheck disable=SC2329
@@ -160,6 +209,25 @@ fss_matches_only_expected_archived_system_failure() {
   archive_fail_paths=$(fss_unique_fail_paths_from_output "$archived_failures")
   [ "$(fss_count_nonempty_lines "$archive_fail_paths")" -eq 1 ] || return 1
   [ "$archive_fail_paths" = "$expected_archive" ]
+}
+
+fss_archived_system_failures_match_allowlist() {
+  local allowed_archives="$1"
+  local archived_failures="${2:-$FSS_ARCHIVED_SYSTEM_FAILURES}"
+  local archive_fail_paths
+  local archive_path
+
+  if [ -z "$allowed_archives" ] || [ -z "$archived_failures" ]; then
+    return 1
+  fi
+
+  archive_fail_paths=$(fss_unique_fail_paths_from_output "$archived_failures")
+  [ -n "$archive_fail_paths" ] || return 1
+
+  while IFS= read -r archive_path || [ -n "$archive_path" ]; do
+    [ -n "$archive_path" ] || continue
+    fss_path_list_contains "$allowed_archives" "$archive_path" || return 1
+  done <<<"$archive_fail_paths"
 }
 
 fss_reset_classification() {

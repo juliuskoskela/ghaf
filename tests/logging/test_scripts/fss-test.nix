@@ -255,6 +255,7 @@ writeShellApplication {
         FSS_KEY="/var/log/journal/$MACHINE_ID/fss"
         FSS_KEY_VOLATILE="/run/log/journal/$MACHINE_ID/fss"
         PRE_FSS_ARCHIVE_FILE="/var/log/journal/$MACHINE_ID/fss-pre-fss-archive"
+        RECOVERY_ARCHIVES_FILE="/var/log/journal/$MACHINE_ID/fss-recovery-archives"
 
         if [ -f "$FSS_KEY" ]; then
           pass "FSS sealing key exists at $FSS_KEY"
@@ -362,8 +363,16 @@ writeShellApplication {
           fss_classify_verify_output "$VERIFY_OUTPUT"
           VERIFY_TAGS=$(fss_classification_tags)
           EXPECTED_PRE_FSS_ARCHIVE=$(fss_read_recorded_pre_fss_archive "$PRE_FSS_ARCHIVE_FILE")
+          EXPECTED_RECOVERY_ARCHIVES=$(fss_read_recorded_archive_list "$RECOVERY_ARCHIVES_FILE")
+          ALLOWED_ARCHIVED_SYSTEM_FAILURES=""
           ARCHIVED_SYSTEM_ALLOWED=0
-          ARCHIVED_SYSTEM_UNEXPECTED=0
+          PRE_FSS_ARCHIVE_ALLOWED=0
+          RECOVERY_ARCHIVE_ALLOWED=0
+
+          if [ -n "$EXPECTED_PRE_FSS_ARCHIVE" ]; then
+            ALLOWED_ARCHIVED_SYSTEM_FAILURES=$(fss_append_unique_line "$ALLOWED_ARCHIVED_SYSTEM_FAILURES" "$EXPECTED_PRE_FSS_ARCHIVE")
+          fi
+          ALLOWED_ARCHIVED_SYSTEM_FAILURES=$(fss_merge_path_lists "$ALLOWED_ARCHIVED_SYSTEM_FAILURES" "$EXPECTED_RECOVERY_ARCHIVES")
 
           if [ "$FSS_KEY_PARSE_ERROR" -eq 1 ] || [ "$FSS_KEY_REQUIRED_ERROR" -eq 1 ]; then
             fail "Journal verification failed due to verification key defect [$VERIFY_TAGS]"
@@ -379,20 +388,38 @@ writeShellApplication {
             print_verify_diagnostics "$VERIFY_OUTPUT" "$VERIFY_TAGS" "$VERIFY_EXIT" "$VERIFY_KEY"
           else
             if [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ]; then
-              if fss_matches_only_expected_archived_system_failure "$EXPECTED_PRE_FSS_ARCHIVE"; then
+              if fss_archived_system_failures_match_allowlist "$ALLOWED_ARCHIVED_SYSTEM_FAILURES"; then
                 ARCHIVED_SYSTEM_ALLOWED=1
-                VERIFY_TAGS=$(fss_append_tag "$VERIFY_TAGS" "PRE_FSS_ARCHIVE")
-              else
-                ARCHIVED_SYSTEM_UNEXPECTED=1
+                ARCHIVED_SYSTEM_FAIL_PATHS=$(fss_unique_fail_paths_from_output "$FSS_ARCHIVED_SYSTEM_FAILURES")
+
+                while IFS= read -r archived_fail_path || [ -n "$archived_fail_path" ]; do
+                  [ -n "$archived_fail_path" ] || continue
+
+                  if [ "$archived_fail_path" = "$EXPECTED_PRE_FSS_ARCHIVE" ]; then
+                    PRE_FSS_ARCHIVE_ALLOWED=1
+                  fi
+
+                  if fss_path_list_contains "$EXPECTED_RECOVERY_ARCHIVES" "$archived_fail_path"; then
+                    RECOVERY_ARCHIVE_ALLOWED=1
+                  fi
+                done <<<"$ARCHIVED_SYSTEM_FAIL_PATHS"
+
+                if [ "$PRE_FSS_ARCHIVE_ALLOWED" -eq 1 ]; then
+                  VERIFY_TAGS=$(fss_append_tag "$VERIFY_TAGS" "PRE_FSS_ARCHIVE")
+                fi
+
+                if [ "$RECOVERY_ARCHIVE_ALLOWED" -eq 1 ]; then
+                  VERIFY_TAGS=$(fss_append_tag "$VERIFY_TAGS" "RECOVERY_ARCHIVE")
+                fi
               fi
             fi
 
-            if [ "$ARCHIVED_SYSTEM_UNEXPECTED" -eq 1 ]; then
+            if [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ] && [ "$ARCHIVED_SYSTEM_ALLOWED" -eq 0 ]; then
               fail "Archived system journal verification failed [$VERIFY_TAGS]"
               echo "   Output: $VERIFY_OUTPUT"
               print_verify_diagnostics "$VERIFY_OUTPUT" "$VERIFY_TAGS" "$VERIFY_EXIT" "$VERIFY_KEY"
             elif [ "$ARCHIVED_SYSTEM_ALLOWED" -eq 1 ] || [ -n "$FSS_USER_FAILURES" ]; then
-              warn "Journal verification passed with recorded pre-FSS archive and/or user warnings [$VERIFY_TAGS]"
+              warn "Journal verification passed with recorded archived-system exceptions and/or user warnings [$VERIFY_TAGS]"
               echo "   Output: $VERIFY_OUTPUT"
               print_verify_diagnostics "$VERIFY_OUTPUT" "$VERIFY_TAGS" "$VERIFY_EXIT" "$VERIFY_KEY"
             elif [ -n "$FSS_TEMP_FAILURES" ]; then

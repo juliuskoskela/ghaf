@@ -35,17 +35,25 @@ _: ''
               source /etc/fss-verify-classifier.sh
               MID=$(cat /etc/machine-id)
               PRE_FSS_ARCHIVE_FILE="/var/log/journal/$MID/fss-pre-fss-archive"
+              RECOVERY_ARCHIVES_FILE="/var/log/journal/$MID/fss-recovery-archives"
               VERIFY_OUTPUT=$(journalctl --verify --verify-key="$KEY" 2>&1 || true)
               fss_classify_verify_output "$VERIFY_OUTPUT"
               VERIFY_TAGS=$(fss_classification_tags)
               EXPECTED_PRE_FSS_ARCHIVE=$(fss_read_recorded_pre_fss_archive "$PRE_FSS_ARCHIVE_FILE")
+              EXPECTED_RECOVERY_ARCHIVES=$(fss_read_recorded_archive_list "$RECOVERY_ARCHIVES_FILE")
+              ALLOWED_ARCHIVED_SYSTEM_FAILURES=""
+
+              if [ -n "$EXPECTED_PRE_FSS_ARCHIVE" ]; then
+                ALLOWED_ARCHIVED_SYSTEM_FAILURES=$(fss_append_unique_line "$ALLOWED_ARCHIVED_SYSTEM_FAILURES" "$EXPECTED_PRE_FSS_ARCHIVE")
+              fi
+              ALLOWED_ARCHIVED_SYSTEM_FAILURES=$(fss_merge_path_lists "$ALLOWED_ARCHIVED_SYSTEM_FAILURES" "$EXPECTED_RECOVERY_ARCHIVES")
 
               if [ "$FSS_KEY_PARSE_ERROR" -eq 1 ] || [ "$FSS_KEY_REQUIRED_ERROR" -eq 1 ]; then
                 printf "%s\\n%s\\n" "$VERIFY_TAGS" "$VERIFY_OUTPUT"
                 exit 1
               fi
 
-              if [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ] && ! fss_matches_only_expected_archived_system_failure "$EXPECTED_PRE_FSS_ARCHIVE"; then
+              if [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ] && ! fss_archived_system_failures_match_allowlist "$ALLOWED_ARCHIVED_SYSTEM_FAILURES"; then
                 printf "%s\\n%s\\n" "$VERIFY_TAGS" "$VERIFY_OUTPUT"
                 exit 1
               fi
@@ -60,7 +68,7 @@ _: ''
               raise Exception(f"Journal verification found critical failures: {output}")
           print(f"Journal verification completed (exit code: {exit_code})")
 
-  with subtest("Verification policy only exempts the recorded pre-FSS archive and user journals"):
+  with subtest("Verification policy only exempts recorded archived-system exceptions and user journals"):
       machine.succeed("""
         bash -lc '
           set -euo pipefail
@@ -68,7 +76,14 @@ _: ''
 
           policy_result() {
             local expected_pre_fss_archive="$1"
-            local pre_fss_archive_allowed=0
+            local expected_recovery_archives="$2"
+            local allowed_archived_system_failures=""
+            local archived_system_allowed=0
+
+            if [ -n "$expected_pre_fss_archive" ]; then
+              allowed_archived_system_failures=$(fss_append_unique_line "$allowed_archived_system_failures" "$expected_pre_fss_archive")
+            fi
+            allowed_archived_system_failures=$(fss_merge_path_lists "$allowed_archived_system_failures" "$expected_recovery_archives")
 
             if [ "$FSS_KEY_PARSE_ERROR" -eq 1 ] || [ "$FSS_KEY_REQUIRED_ERROR" -eq 1 ]; then
               printf "%s\n" "fail"
@@ -81,15 +96,15 @@ _: ''
             fi
 
             if [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ]; then
-              if fss_matches_only_expected_archived_system_failure "$expected_pre_fss_archive"; then
-                pre_fss_archive_allowed=1
+              if fss_archived_system_failures_match_allowlist "$allowed_archived_system_failures"; then
+                archived_system_allowed=1
               else
                 printf "%s\n" "fail"
                 return 0
               fi
             fi
 
-            if [ "$pre_fss_archive_allowed" -eq 1 ] || [ -n "$FSS_USER_FAILURES" ]; then
+            if [ "$archived_system_allowed" -eq 1 ] || [ -n "$FSS_USER_FAILURES" ]; then
               printf "%s\n" "partial"
               return 0
             fi
@@ -104,7 +119,7 @@ _: ''
           [ -z "$FSS_ARCHIVED_SYSTEM_FAILURES" ]
           [ -z "$FSS_USER_FAILURES" ]
           [ "$FSS_REASON_TAGS" = "BAD_MESSAGE" ]
-          [ "$(policy_result "")" = "fail" ]
+          [ "$(policy_result "" "")" = "fail" ]
 
           allowed_archive="/var/log/journal/mid/system@0000000000000001-0000000000000002.journal"
           allowed_archived_sample=$(printf "%s\n" \
@@ -116,7 +131,16 @@ _: ''
           [ -z "$FSS_OTHER_FAILURES" ]
           [ "$FSS_REASON_TAGS" = "INPUT_OUTPUT_ERROR" ]
           fss_matches_only_expected_archived_system_failure "$allowed_archive"
-          [ "$(policy_result "$allowed_archive")" = "partial" ]
+          [ "$(policy_result "$allowed_archive" "")" = "partial" ]
+
+          recovery_archive="/var/log/journal/mid/system@0000000000000005-0000000000000006.journal"
+          allowed_recovery_archives=$(printf "%s\n%s\n" "$recovery_archive" "$recovery_archive")
+          recovery_archived_sample=$(printf "%s\n" \
+            "FAIL: $recovery_archive (Bad message)" \
+            "PASS: /var/log/journal/mid/system.journal")
+          fss_classify_verify_output "$recovery_archived_sample"
+          [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ]
+          [ "$(policy_result "" "$allowed_recovery_archives")" = "partial" ]
 
           unexpected_archive="/var/log/journal/mid/system@0000000000000003-0000000000000004.journal"
           unexpected_archived_sample=$(printf "%s\n" \
@@ -125,15 +149,22 @@ _: ''
           fss_classify_verify_output "$unexpected_archived_sample"
           [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ]
           ! fss_matches_only_expected_archived_system_failure "$allowed_archive"
-          [ "$(policy_result "$allowed_archive")" = "fail" ]
+          [ "$(policy_result "$allowed_archive" "$allowed_recovery_archives")" = "fail" ]
 
           multiple_archives_sample=$(printf "%s\n" \
             "FAIL: $allowed_archive (Bad message)" \
-            "FAIL: $unexpected_archive (Bad message)")
+            "FAIL: $recovery_archive (Bad message)")
           fss_classify_verify_output "$multiple_archives_sample"
           [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ]
+          [ "$(policy_result "$allowed_archive" "$allowed_recovery_archives")" = "partial" ]
+
+          unexpected_multiple_archives_sample=$(printf "%s\n" \
+            "FAIL: $allowed_archive (Bad message)" \
+            "FAIL: $unexpected_archive (Bad message)")
+          fss_classify_verify_output "$unexpected_multiple_archives_sample"
+          [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ]
           ! fss_matches_only_expected_archived_system_failure "$allowed_archive"
-          [ "$(policy_result "$allowed_archive")" = "fail" ]
+          [ "$(policy_result "$allowed_archive" "$allowed_recovery_archives")" = "fail" ]
 
           user_sample=$(printf "%s\n" \
             "FAIL: /var/log/journal/mid/user-1000@0000000000000001-0000000000000002.journal (Bad message)" \
@@ -143,7 +174,7 @@ _: ''
           [ -n "$FSS_USER_FAILURES" ]
           [ -z "$FSS_OTHER_FAILURES" ]
           [ "$FSS_REASON_TAGS" = "BAD_MESSAGE" ]
-          [ "$(policy_result "")" = "partial" ]
+          [ "$(policy_result "" "")" = "partial" ]
 
           user_active_sample=$(printf "%s\n" \
             "2cb2e0: Tag failed verification" \
@@ -158,7 +189,7 @@ _: ''
           [ "$tags" = "BAD_MESSAGE" ]
           [ -n "$FSS_USER_FAILURES" ]
           [ -z "$FSS_ACTIVE_SYSTEM_FAILURES" ]
-          [ "$(policy_result "")" = "partial" ]
+          [ "$(policy_result "" "")" = "partial" ]
 
           temp_sample=$(printf "%s\n" \
             "FAIL: /var/log/journal/mid/system@0000000000000001-0000000000000002.journal~ (Bad message)")
@@ -168,7 +199,7 @@ _: ''
           [ -z "$FSS_USER_FAILURES" ]
           [ -n "$FSS_TEMP_FAILURES" ]
           [ "$FSS_REASON_TAGS" = "BAD_MESSAGE" ]
-          [ "$(policy_result "")" = "pass" ]
+          [ "$(policy_result "" "")" = "pass" ]
 
           temp_with_diagnostics_sample=$(printf "%s\n" \
             "2cb2e0: Tag failed verification" \
@@ -179,7 +210,7 @@ _: ''
           [ -z "$FSS_USER_FAILURES" ]
           [ -n "$FSS_TEMP_FAILURES" ]
           [ -z "$FSS_OTHER_FAILURES" ]
-          [ "$(policy_result "")" = "pass" ]
+          [ "$(policy_result "" "")" = "pass" ]
 
           other_sample=$(printf "%s\n" \
             "FAIL: /var/log/journal/mid/custom.journal (Bad message)")
@@ -189,7 +220,7 @@ _: ''
           [ -z "$FSS_USER_FAILURES" ]
           [ -n "$FSS_OTHER_FAILURES" ]
           [ -z "$FSS_TEMP_FAILURES" ]
-          [ "$(policy_result "")" = "fail" ]
+          [ "$(policy_result "" "")" = "fail" ]
 
           mixed_sample=$(printf "%s\n" \
             "FAIL: /var/log/journal/mid/system.journal (Bad message)" \
@@ -215,7 +246,7 @@ _: ''
           [ "$FSS_KEY_REQUIRED_ERROR" -eq 1 ]
           [ "$FSS_REASON_TAGS" = "KEY_PARSE_ERROR,KEY_MISSING" ]
           [ "$(fss_classification_tags)" = "KEY_PARSE_ERROR,KEY_MISSING,ACTIVE_SYSTEM" ]
-          [ "$(policy_result "")" = "fail" ]
+          [ "$(policy_result "" "")" = "fail" ]
 
           fss_classify_verify_output ""
           [ -z "$FSS_REASON_TAGS" ]
@@ -228,7 +259,7 @@ _: ''
           [ "$FSS_KEY_PARSE_ERROR" -eq 0 ]
           [ "$FSS_KEY_REQUIRED_ERROR" -eq 0 ]
           [ "$FSS_FILESYSTEM_RESTRICTION" -eq 0 ]
-          [ "$(policy_result "")" = "pass" ]
+          [ "$(policy_result "" "")" = "pass" ]
 
           log_output=$(
             {
@@ -253,6 +284,11 @@ _: ''
           [ "$(fss_read_recorded_pre_fss_archive "$state_file")" = "/var/log/journal/mid/system@0000000000000001-0000000000000002.journal" ]
           rm -f "$state_file"
           [ -z "$(fss_read_recorded_pre_fss_archive "$state_file")" ]
+
+          list_file=$(mktemp)
+          printf " %s \n%s\n%s\n" "$allowed_archive" "$recovery_archive" "$recovery_archive" > "$list_file"
+          [ "$(fss_read_recorded_archive_list "$list_file")" = "$(printf "%s\n%s" "$allowed_archive" "$recovery_archive")" ]
+          rm -f "$list_file"
         '
       """)
 
@@ -443,6 +479,37 @@ _: ''
               [ "$after_recovery_invocation" != "$before_recovery_invocation" ]
               systemctl reset-failed journal-fss-verify.service >/dev/null 2>&1 || true
               systemctl start journal-fss-verify.service >/tmp/journal-fss-verify-recovery.log 2>&1
+            '
+          """)
+
+  with subtest("Key regeneration rotates journals even when the cleanup marker already exists"):
+      if not setup_succeeded:
+          print(f"Skipping key-regeneration rotation check because FSS setup did not complete successfully: {setup_status}")
+      else:
+          machine.succeed("""
+            bash -lc '
+              set -euo pipefail
+              MACHINE_ID=$(cat /etc/machine-id)
+              STATE_DIR="/var/log/journal/$MACHINE_ID"
+              ROTATED_MARKER="$STATE_DIR/fss-rotated"
+              PRE_FSS_ARCHIVE_FILE="$STATE_DIR/fss-pre-fss-archive"
+
+              if [ -f "$STATE_DIR/fss" ]; then
+                FSS_KEY_FILE="$STATE_DIR/fss"
+              else
+                FSS_KEY_FILE="/run/log/journal/$MACHINE_ID/fss"
+              fi
+
+              test -f "$FSS_KEY_FILE"
+              test -f "$ROTATED_MARKER"
+              old_marker_mtime=$(stat -c %Y "$ROTATED_MARKER")
+              sleep 1
+              rm -f "$FSS_KEY_FILE"
+              systemctl restart journal-fss-setup.service >/tmp/journal-fss-setup-regeneration.log 2>&1
+              test -f "$FSS_KEY_FILE"
+              test -f "$PRE_FSS_ARCHIVE_FILE"
+              new_marker_mtime=$(stat -c %Y "$ROTATED_MARKER")
+              [ "$new_marker_mtime" -gt "$old_marker_mtime" ]
             '
           """)
 

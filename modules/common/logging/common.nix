@@ -54,13 +54,72 @@ let
     runtimeInputs = with pkgs; [
       coreutils
       gawk
+      gnugrep
       systemd
     ];
     text = ''
+      machine_id="$(cat /etc/machine-id)"
+      state_dir="/var/log/journal/$machine_id"
+      recovery_archives_file="$state_dir/fss-recovery-archives"
       stamp="/run/ghaf-journal-alloy-recover.stamp"
       now_ms="$(awk '{printf "%d\n", $1 * 1000}' /proc/uptime)"
       cooldown="${toString recCfg.cooldownSeconds}"
       cooldown_ms=$((cooldown * 1000))
+      before_file="$(mktemp)"
+
+      cleanup() {
+        rm -f "$before_file"
+      }
+
+      list_archived_system_journals() {
+        local journal_dir
+        local archive_path
+
+        for journal_dir in \
+          "/var/log/journal/$machine_id" \
+          "/run/log/journal/$machine_id"; do
+          for archive_path in "$journal_dir"/system@*.journal; do
+            [ -f "$archive_path" ] || continue
+            printf '%s\n' "$archive_path"
+          done
+        done | sort -u
+      }
+
+      append_unique_archive() {
+        local archive_path="$1"
+
+        [ -n "$archive_path" ] || return 0
+
+        if [ -f "$recovery_archives_file" ] && grep -Fxq "$archive_path" "$recovery_archives_file"; then
+          return 0
+        fi
+
+        printf '%s\n' "$archive_path" >> "$recovery_archives_file"
+      }
+
+      record_recovery_archives() {
+        local after_file
+        local archive_path
+
+        mkdir -p "$state_dir"
+        touch "$recovery_archives_file"
+        chmod 0644 "$recovery_archives_file"
+
+        after_file="$(mktemp)"
+        list_archived_system_journals > "$after_file"
+
+        while IFS= read -r archive_path || [ -n "$archive_path" ]; do
+          [ -n "$archive_path" ] || continue
+          if ! grep -Fxq "$archive_path" "$before_file"; then
+            append_unique_archive "$archive_path"
+          fi
+        done < "$after_file"
+
+        rm -f "$after_file"
+      }
+
+      trap cleanup EXIT
+      list_archived_system_journals > "$before_file"
 
       if [ -e "$stamp" ]; then
         last="$(cat "$stamp" 2>/dev/null || echo 0)"
@@ -78,6 +137,7 @@ let
 
       systemd-tmpfiles --create --prefix /var/log/journal
       systemctl restart systemd-journald.service
+      record_recovery_archives
 
       if systemctl cat alloy.service >/dev/null 2>&1; then
         systemctl restart alloy.service

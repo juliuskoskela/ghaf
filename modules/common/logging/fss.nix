@@ -221,10 +221,16 @@ let
 
       rotate_to_clean_fss_state() {
         local journal_dir="$1"
+        local sealing_key_file="$2"
         local rotated_marker="$STATE_DIR/fss-rotated"
         local before_file
+        local marker_mtime=""
+        local key_mtime=""
 
-        if [ -f "$rotated_marker" ]; then
+        marker_mtime=$(stat -c %Y "$rotated_marker" 2>/dev/null || true)
+        key_mtime=$(stat -c %Y "$sealing_key_file" 2>/dev/null || true)
+
+        if [ -n "$marker_mtime" ] && [ -n "$key_mtime" ] && [ "$marker_mtime" -ge "$key_mtime" ]; then
           backfill_pre_fss_archive_if_missing "$journal_dir"
           return 0
         fi
@@ -311,7 +317,7 @@ let
           restart_journald_for_fss_activation
         fi
         # One-time rotation to move pre-FSS entries to archive (fixes "Bad message")
-        rotate_to_clean_fss_state "$JOURNAL_DIR"
+        rotate_to_clean_fss_state "$JOURNAL_DIR" "$FSS_KEY_FILE"
         exit 0
       fi
 
@@ -355,7 +361,7 @@ let
         # even when verification key export failed during initial setup.
         echo "Warning: Verification key missing after key generation. Verify service will alert."
         restart_journald_for_fss_activation
-        rotate_to_clean_fss_state "$JOURNAL_DIR"
+        rotate_to_clean_fss_state "$JOURNAL_DIR" "$FSS_KEY_FILE"
         publish_setup_state
         exit 1
       fi
@@ -365,7 +371,7 @@ let
       restart_journald_for_fss_activation
 
       # Rotate so active journal starts clean with FSS (pre-FSS entries become archive)
-      rotate_to_clean_fss_state "$JOURNAL_DIR"
+      rotate_to_clean_fss_state "$JOURNAL_DIR" "$FSS_KEY_FILE"
 
       # Create sentinel file to prevent re-initialization
       publish_setup_state
@@ -420,6 +426,7 @@ let
 
             MACHINE_ID=$(cat /etc/machine-id)
             PRE_FSS_ARCHIVE_FILE="/var/log/journal/$MACHINE_ID/fss-pre-fss-archive"
+            RECOVERY_ARCHIVES_FILE="/var/log/journal/$MACHINE_ID/fss-recovery-archives"
             VERIFY_KEY=$(cat "$VERIFY_KEY_FILE")
             fss_log_info "Using verification key from $VERIFY_KEY_FILE"
             KEY_LENGTH=$(echo -n "$VERIFY_KEY" | wc -c)
@@ -473,12 +480,39 @@ let
             fi
 
             PRE_FSS_ARCHIVE_ALLOWED=0
+            RECOVERY_ARCHIVE_ALLOWED=0
+            ALLOWED_ARCHIVED_SYSTEM_FAILURES=""
             EXPECTED_PRE_FSS_ARCHIVE=$(fss_read_recorded_pre_fss_archive "$PRE_FSS_ARCHIVE_FILE")
+            EXPECTED_RECOVERY_ARCHIVES=$(fss_read_recorded_archive_list "$RECOVERY_ARCHIVES_FILE")
+
+            if [ -n "$EXPECTED_PRE_FSS_ARCHIVE" ]; then
+              ALLOWED_ARCHIVED_SYSTEM_FAILURES=$(fss_append_unique_line "$ALLOWED_ARCHIVED_SYSTEM_FAILURES" "$EXPECTED_PRE_FSS_ARCHIVE")
+            fi
+            ALLOWED_ARCHIVED_SYSTEM_FAILURES=$(fss_merge_path_lists "$ALLOWED_ARCHIVED_SYSTEM_FAILURES" "$EXPECTED_RECOVERY_ARCHIVES")
 
             if [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ]; then
-              if fss_matches_only_expected_archived_system_failure "$EXPECTED_PRE_FSS_ARCHIVE"; then
-                PRE_FSS_ARCHIVE_ALLOWED=1
-                VERIFY_TAGS=$(fss_append_tag "$VERIFY_TAGS" "PRE_FSS_ARCHIVE")
+              if fss_archived_system_failures_match_allowlist "$ALLOWED_ARCHIVED_SYSTEM_FAILURES"; then
+                ARCHIVED_SYSTEM_FAIL_PATHS=$(fss_unique_fail_paths_from_output "$FSS_ARCHIVED_SYSTEM_FAILURES")
+
+                while IFS= read -r archived_fail_path || [ -n "$archived_fail_path" ]; do
+                  [ -n "$archived_fail_path" ] || continue
+
+                  if [ "$archived_fail_path" = "$EXPECTED_PRE_FSS_ARCHIVE" ]; then
+                    PRE_FSS_ARCHIVE_ALLOWED=1
+                  fi
+
+                  if fss_path_list_contains "$EXPECTED_RECOVERY_ARCHIVES" "$archived_fail_path"; then
+                    RECOVERY_ARCHIVE_ALLOWED=1
+                  fi
+                done <<<"$ARCHIVED_SYSTEM_FAIL_PATHS"
+
+                if [ "$PRE_FSS_ARCHIVE_ALLOWED" -eq 1 ]; then
+                  VERIFY_TAGS=$(fss_append_tag "$VERIFY_TAGS" "PRE_FSS_ARCHIVE")
+                fi
+
+                if [ "$RECOVERY_ARCHIVE_ALLOWED" -eq 1 ]; then
+                  VERIFY_TAGS=$(fss_append_tag "$VERIFY_TAGS" "RECOVERY_ARCHIVE")
+                fi
               else
                 audit_log crit "AUDIT_LOG_INTEGRITY_FAIL: Journal integrity verification FAILED [$VERIFY_TAGS]"
                 fss_log_fail "Journal integrity verification: FAILED"
@@ -490,13 +524,18 @@ let
               fi
             fi
 
-            if [ "$PRE_FSS_ARCHIVE_ALLOWED" -eq 1 ]; then
+            if [ "$PRE_FSS_ARCHIVE_ALLOWED" -eq 1 ] || [ "$RECOVERY_ARCHIVE_ALLOWED" -eq 1 ]; then
               audit_log warning "WARNING: Journal integrity verification PARTIAL [$VERIFY_TAGS]"
-              fss_log_warn "Journal integrity verification: PARTIAL (recorded pre-FSS archive and/or user journal failures only)"
+              fss_log_warn "Journal integrity verification: PARTIAL (recorded archived system journal exceptions and/or user journal failures only)"
               fss_log_block <<EOF
       Output: $VERIFY_OUTPUT
 
-      The recorded pre-FSS archive at $EXPECTED_PRE_FSS_ARCHIVE cannot be sealed retroactively.
+      $(if [ "$PRE_FSS_ARCHIVE_ALLOWED" -eq 1 ]; then
+          printf '%s\n' "The recorded pre-FSS archive at $EXPECTED_PRE_FSS_ARCHIVE cannot be sealed retroactively."
+        fi)
+      $(if [ "$RECOVERY_ARCHIVE_ALLOWED" -eq 1 ]; then
+          printf '%s\n' "Recorded recovery-created archived system journals are allowed warning-only failures."
+        fi)
       User journal failures remain non-fatal unless a system journal also fails.
       EOF
               exit 0
