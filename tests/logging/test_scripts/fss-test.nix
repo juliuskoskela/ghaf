@@ -254,6 +254,7 @@ writeShellApplication {
         MACHINE_ID=$(cat /etc/machine-id)
         FSS_KEY="/var/log/journal/$MACHINE_ID/fss"
         FSS_KEY_VOLATILE="/run/log/journal/$MACHINE_ID/fss"
+        PRE_FSS_ARCHIVE_FILE="/var/log/journal/$MACHINE_ID/fss-pre-fss-archive"
 
         if [ -f "$FSS_KEY" ]; then
           pass "FSS sealing key exists at $FSS_KEY"
@@ -360,6 +361,9 @@ writeShellApplication {
 
           fss_classify_verify_output "$VERIFY_OUTPUT"
           VERIFY_TAGS=$(fss_classification_tags)
+          EXPECTED_PRE_FSS_ARCHIVE=$(fss_read_recorded_pre_fss_archive "$PRE_FSS_ARCHIVE_FILE")
+          ARCHIVED_SYSTEM_ALLOWED=0
+          ARCHIVED_SYSTEM_UNEXPECTED=0
 
           if [ "$FSS_KEY_PARSE_ERROR" -eq 1 ] || [ "$FSS_KEY_REQUIRED_ERROR" -eq 1 ]; then
             fail "Journal verification failed due to verification key defect [$VERIFY_TAGS]"
@@ -373,24 +377,39 @@ writeShellApplication {
             fail "Journal verification found unclassified critical failures [$VERIFY_TAGS]"
             echo "   Output: $VERIFY_OUTPUT"
             print_verify_diagnostics "$VERIFY_OUTPUT" "$VERIFY_TAGS" "$VERIFY_EXIT" "$VERIFY_KEY"
-          elif [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ] || [ -n "$FSS_USER_FAILURES" ]; then
-            warn "Journal verification passed with archive/user warnings [$VERIFY_TAGS]"
-            echo "   Output: $VERIFY_OUTPUT"
-            print_verify_diagnostics "$VERIFY_OUTPUT" "$VERIFY_TAGS" "$VERIFY_EXIT" "$VERIFY_KEY"
-          elif [ -n "$FSS_TEMP_FAILURES" ]; then
-            pass "Journal verification passed (temporary journal files ignored)"
-            echo "   Ignored temp failures: $FSS_TEMP_FAILURES"
-            print_verify_diagnostics "$VERIFY_OUTPUT" "$VERIFY_TAGS" "$VERIFY_EXIT" "$VERIFY_KEY"
-          elif [ "$VERIFY_EXIT" -eq 0 ]; then
-            pass "Journal verification passed"
-          elif [ "$FSS_FILESYSTEM_RESTRICTION" -eq 1 ]; then
-            warn "Verification encountered filesystem restrictions [$VERIFY_TAGS]"
-            echo "   Output: $VERIFY_OUTPUT"
-            print_verify_diagnostics "$VERIFY_OUTPUT" "$VERIFY_TAGS" "$VERIFY_EXIT"
           else
-            warn "Verification returned exit code $VERIFY_EXIT without critical failures [$VERIFY_TAGS]"
-            echo "   Output: $VERIFY_OUTPUT"
-            print_verify_diagnostics "$VERIFY_OUTPUT" "$VERIFY_TAGS" "$VERIFY_EXIT" "$VERIFY_KEY"
+            if [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ]; then
+              if fss_matches_only_expected_archived_system_failure "$EXPECTED_PRE_FSS_ARCHIVE"; then
+                ARCHIVED_SYSTEM_ALLOWED=1
+                VERIFY_TAGS=$(fss_append_tag "$VERIFY_TAGS" "PRE_FSS_ARCHIVE")
+              else
+                ARCHIVED_SYSTEM_UNEXPECTED=1
+              fi
+            fi
+
+            if [ "$ARCHIVED_SYSTEM_UNEXPECTED" -eq 1 ]; then
+              fail "Archived system journal verification failed [$VERIFY_TAGS]"
+              echo "   Output: $VERIFY_OUTPUT"
+              print_verify_diagnostics "$VERIFY_OUTPUT" "$VERIFY_TAGS" "$VERIFY_EXIT" "$VERIFY_KEY"
+            elif [ "$ARCHIVED_SYSTEM_ALLOWED" -eq 1 ] || [ -n "$FSS_USER_FAILURES" ]; then
+              warn "Journal verification passed with recorded pre-FSS archive and/or user warnings [$VERIFY_TAGS]"
+              echo "   Output: $VERIFY_OUTPUT"
+              print_verify_diagnostics "$VERIFY_OUTPUT" "$VERIFY_TAGS" "$VERIFY_EXIT" "$VERIFY_KEY"
+            elif [ -n "$FSS_TEMP_FAILURES" ]; then
+              pass "Journal verification passed (temporary journal files ignored)"
+              echo "   Ignored temp failures: $FSS_TEMP_FAILURES"
+              print_verify_diagnostics "$VERIFY_OUTPUT" "$VERIFY_TAGS" "$VERIFY_EXIT" "$VERIFY_KEY"
+            elif [ "$VERIFY_EXIT" -eq 0 ]; then
+              pass "Journal verification passed"
+            elif [ "$FSS_FILESYSTEM_RESTRICTION" -eq 1 ]; then
+              warn "Verification encountered filesystem restrictions [$VERIFY_TAGS]"
+              echo "   Output: $VERIFY_OUTPUT"
+              print_verify_diagnostics "$VERIFY_OUTPUT" "$VERIFY_TAGS" "$VERIFY_EXIT"
+            else
+              warn "Verification returned exit code $VERIFY_EXIT without critical failures [$VERIFY_TAGS]"
+              echo "   Output: $VERIFY_OUTPUT"
+              print_verify_diagnostics "$VERIFY_OUTPUT" "$VERIFY_TAGS" "$VERIFY_EXIT" "$VERIFY_KEY"
+            fi
           fi
         fi
 

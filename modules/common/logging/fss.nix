@@ -94,6 +94,7 @@ let
       systemd
       coreutils
       gawk
+      findutils
     ];
     text = ''
       export LC_ALL=C
@@ -102,9 +103,140 @@ let
       INIT_FILE="$KEY_DIR/initialized"
       VERIFY_KEY_FILE="$KEY_DIR/verification-key"
       MACHINE_ID=$(cat /etc/machine-id)
+      STATE_DIR="/var/log/journal/$MACHINE_ID"
+      PRE_FSS_ARCHIVE_FILE="$STATE_DIR/fss-pre-fss-archive"
 
       clear_initialized_state() {
         rm -f "$INIT_FILE"
+      }
+
+      publish_setup_state() {
+        touch "$INIT_FILE"
+        chmod 0644 "$INIT_FILE"
+        # Write config pointer so test scripts can discover KEY_DIR without hostname
+        printf '%s\n' "$KEY_DIR" > "$STATE_DIR/fss-config"
+        chmod 0644 "$STATE_DIR/fss-config"
+      }
+
+      write_pre_fss_archive_record() {
+        local archive_path="$1"
+
+        rm -f "$PRE_FSS_ARCHIVE_FILE"
+        if [ -n "$archive_path" ]; then
+          printf '%s\n' "$archive_path" > "$PRE_FSS_ARCHIVE_FILE"
+          chmod 0644 "$PRE_FSS_ARCHIVE_FILE"
+        fi
+      }
+
+      list_archived_system_journals() {
+        local journal_dir="$1"
+
+        find "$journal_dir" -maxdepth 1 -type f -name 'system@*.journal' -print 2>/dev/null | sort
+      }
+
+      record_rotated_pre_fss_archive() {
+        local before_file="$1"
+        local journal_dir="$2"
+        local archive_path=""
+        local candidate=""
+        local after_file
+
+        after_file=$(mktemp)
+        list_archived_system_journals "$journal_dir" > "$after_file"
+
+        while IFS= read -r archive_path || [ -n "$archive_path" ]; do
+          if [ -z "$archive_path" ]; then
+            continue
+          fi
+
+          if ! grep -Fxq "$archive_path" "$before_file"; then
+            if [ -n "$candidate" ]; then
+              echo "Warning: Multiple new archived system journals detected after rotation; not recording pre-FSS archive."
+              candidate=""
+              break
+            fi
+
+            candidate="$archive_path"
+          fi
+        done < "$after_file"
+
+        rm -f "$after_file"
+        write_pre_fss_archive_record "$candidate"
+      }
+
+      backfill_pre_fss_archive_if_missing() {
+        local journal_dir="$1"
+        local archive_path=""
+        local candidate=""
+        local matching_count=0
+        local marker_mtime=""
+        local archive_mtime=""
+        local delta=0
+        local mtime_tolerance_sec=2
+
+        if [ -s "$PRE_FSS_ARCHIVE_FILE" ]; then
+          return 0
+        fi
+
+        marker_mtime=$(stat -c %Y "$STATE_DIR/fss-rotated" 2>/dev/null || true)
+        if [ -z "$marker_mtime" ]; then
+          echo "Warning: Unable to read fss-rotated timestamp; not backfilling pre-FSS archive metadata."
+          return 0
+        fi
+
+        while IFS= read -r archive_path || [ -n "$archive_path" ]; do
+          if [ -z "$archive_path" ]; then
+            continue
+          fi
+
+          archive_mtime=$(stat -c %Y "$archive_path" 2>/dev/null || true)
+          if [ -z "$archive_mtime" ]; then
+            continue
+          fi
+
+          delta=$((archive_mtime - marker_mtime))
+          if [ "$delta" -lt 0 ]; then
+            delta=$((0 - delta))
+          fi
+
+          if [ "$delta" -le "$mtime_tolerance_sec" ]; then
+            matching_count=$((matching_count + 1))
+            if [ "$matching_count" -gt 1 ]; then
+              echo "Warning: Multiple archived system journals match the FSS rotation timestamp; not backfilling pre-FSS archive metadata."
+              return 0
+            fi
+
+            candidate="$archive_path"
+          fi
+        done < <(list_archived_system_journals "$journal_dir")
+
+        if [ "$matching_count" -eq 1 ] && [ -n "$candidate" ]; then
+          echo "Backfilling recorded pre-FSS archive metadata for $candidate"
+          write_pre_fss_archive_record "$candidate"
+          return 0
+        fi
+
+        echo "Warning: No archived system journal matches the FSS rotation timestamp; not backfilling pre-FSS archive metadata."
+      }
+
+      rotate_to_clean_fss_state() {
+        local journal_dir="$1"
+        local rotated_marker="$STATE_DIR/fss-rotated"
+        local before_file
+
+        if [ -f "$rotated_marker" ]; then
+          backfill_pre_fss_archive_if_missing "$journal_dir"
+          return 0
+        fi
+
+        before_file=$(mktemp)
+        list_archived_system_journals "$journal_dir" > "$before_file"
+        echo "Rotating journal to ensure clean FSS state..."
+        journalctl --rotate 2>/dev/null || true
+        record_rotated_pre_fss_archive "$before_file" "$journal_dir"
+        rm -f "$before_file"
+        touch "$rotated_marker"
+        chmod 0644 "$rotated_marker"
       }
 
       ensure_verification_key_ready() {
@@ -143,36 +275,31 @@ let
         FSS_KEY_FILE="/run/log/journal/$MACHINE_ID/fss"
         echo "Note: Using volatile storage location for FSS keys"
       fi
+      JOURNAL_DIR=$(dirname "$FSS_KEY_FILE")
 
       # Create key directory if it doesn't exist
       mkdir -p "$KEY_DIR"
       chmod 0700 "$KEY_DIR"
 
       # Ensure journal directory exists (for persistent storage)
-      mkdir -p "/var/log/journal/$MACHINE_ID"
+      mkdir -p "$STATE_DIR"
       # Set permissions if possible (may fail in restricted environments like MicroVMs)
       chmod 0755 "/var/log/journal" 2>/dev/null || true
-      chmod 2755 "/var/log/journal/$MACHINE_ID" 2>/dev/null || true
+      chmod 2755 "$STATE_DIR" 2>/dev/null || true
 
       # Check if FSS keys already exist
       if [ -f "$FSS_KEY_FILE" ]; then
         echo "FSS sealing key already exists at $FSS_KEY_FILE"
         if ! ensure_verification_key_ready; then
-          clear_initialized_state
+          # Keep sentinel so verify service can detect and alert on KEY_MISSING periodically
+          echo "Warning: Verification key missing but sealing key present. Verify service will alert."
+          publish_setup_state
           exit 1
         fi
         echo "Setup already complete, verification key present, creating sentinel file"
-        touch "$INIT_FILE"
-        chmod 0644 "$INIT_FILE"
-        # Write config pointer so test scripts can discover KEY_DIR without hostname
-        echo "$KEY_DIR" > "/var/log/journal/$MACHINE_ID/fss-config"
-        chmod 0644 "/var/log/journal/$MACHINE_ID/fss-config"
+        publish_setup_state
         # One-time rotation to move pre-FSS entries to archive (fixes "Bad message")
-        if [ ! -f "/var/log/journal/$MACHINE_ID/fss-rotated" ]; then
-          echo "Rotating journal to ensure clean FSS state..."
-          journalctl --rotate 2>/dev/null || true
-          touch "/var/log/journal/$MACHINE_ID/fss-rotated"
-        fi
+        rotate_to_clean_fss_state "$JOURNAL_DIR"
         exit 0
       fi
 
@@ -212,7 +339,10 @@ let
       fi
 
       if ! ensure_verification_key_ready; then
-        clear_initialized_state
+        # The sealing key exists now, so keep verify enabled to emit KEY_MISSING
+        # even when verification key export failed during initial setup.
+        echo "Warning: Verification key missing after key generation. Verify service will alert."
+        publish_setup_state
         exit 1
       fi
 
@@ -224,17 +354,10 @@ let
       fi
 
       # Rotate so active journal starts clean with FSS (pre-FSS entries become archive)
-      journalctl --rotate 2>/dev/null || true
+      rotate_to_clean_fss_state "$JOURNAL_DIR"
 
       # Create sentinel file to prevent re-initialization
-      touch "$INIT_FILE"
-      chmod 0644 "$INIT_FILE"
-
-      # Write config pointer so test scripts can discover KEY_DIR without hostname
-      echo "$KEY_DIR" > "/var/log/journal/$MACHINE_ID/fss-config"
-      chmod 0644 "/var/log/journal/$MACHINE_ID/fss-config"
-
-      touch "/var/log/journal/$MACHINE_ID/fss-rotated"
+      publish_setup_state
 
       echo "Forward Secure Sealing initialization complete"
       echo "Sealing key: $FSS_KEY_FILE"
@@ -284,6 +407,8 @@ let
               exit 1
             fi
 
+            MACHINE_ID=$(cat /etc/machine-id)
+            PRE_FSS_ARCHIVE_FILE="/var/log/journal/$MACHINE_ID/fss-pre-fss-archive"
             VERIFY_KEY=$(cat "$VERIFY_KEY_FILE")
             fss_log_info "Using verification key from $VERIFY_KEY_FILE"
             KEY_LENGTH=$(echo -n "$VERIFY_KEY" | wc -c)
@@ -336,14 +461,43 @@ let
               exit 1
             fi
 
-            if [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ] || [ -n "$FSS_USER_FAILURES" ]; then
+            PRE_FSS_ARCHIVE_ALLOWED=0
+            EXPECTED_PRE_FSS_ARCHIVE=$(fss_read_recorded_pre_fss_archive "$PRE_FSS_ARCHIVE_FILE")
+
+            if [ -n "$FSS_ARCHIVED_SYSTEM_FAILURES" ]; then
+              if fss_matches_only_expected_archived_system_failure "$EXPECTED_PRE_FSS_ARCHIVE"; then
+                PRE_FSS_ARCHIVE_ALLOWED=1
+                VERIFY_TAGS=$(fss_append_tag "$VERIFY_TAGS" "PRE_FSS_ARCHIVE")
+              else
+                audit_log crit "AUDIT_LOG_INTEGRITY_FAIL: Journal integrity verification FAILED [$VERIFY_TAGS]"
+                fss_log_fail "Journal integrity verification: FAILED"
+                fss_log_block <<EOF
+      Output: $VERIFY_OUTPUT
+      WARNING: Archived system journal integrity issue detected outside the recorded pre-FSS archive
+      EOF
+                exit 1
+              fi
+            fi
+
+            if [ "$PRE_FSS_ARCHIVE_ALLOWED" -eq 1 ]; then
               audit_log warning "WARNING: Journal integrity verification PARTIAL [$VERIFY_TAGS]"
-              fss_log_warn "Journal integrity verification: PARTIAL (archive/user journal failures only)"
+              fss_log_warn "Journal integrity verification: PARTIAL (recorded pre-FSS archive and/or user journal failures only)"
               fss_log_block <<EOF
       Output: $VERIFY_OUTPUT
 
-      Archived and user journal failures can occur after FSS initialization or journal recovery.
-      Active system journal verification passed or did not report failures.
+      The recorded pre-FSS archive at $EXPECTED_PRE_FSS_ARCHIVE cannot be sealed retroactively.
+      User journal failures remain non-fatal unless a system journal also fails.
+      EOF
+              exit 0
+            fi
+
+            if [ -n "$FSS_USER_FAILURES" ]; then
+              audit_log warning "WARNING: Journal integrity verification PARTIAL [$VERIFY_TAGS]"
+              fss_log_warn "Journal integrity verification: PARTIAL (user journal failures only)"
+              fss_log_block <<EOF
+      Output: $VERIFY_OUTPUT
+
+      User journal failures are reported separately from system journal integrity.
       EOF
               exit 0
             fi

@@ -138,6 +138,30 @@ fss_unique_fail_paths_from_output() {
   printf '%s' "$unique_paths"
 }
 
+# shellcheck disable=SC2329
+fss_read_recorded_pre_fss_archive() {
+  local state_file="$1"
+
+  if [ -r "$state_file" ] && [ -s "$state_file" ]; then
+    tr -d '[:space:]' <"$state_file"
+  fi
+}
+
+# shellcheck disable=SC2329
+fss_matches_only_expected_archived_system_failure() {
+  local expected_archive="$1"
+  local archived_failures="${2:-$FSS_ARCHIVED_SYSTEM_FAILURES}"
+  local archive_fail_paths
+
+  if [ -z "$expected_archive" ] || [ -z "$archived_failures" ]; then
+    return 1
+  fi
+
+  archive_fail_paths=$(fss_unique_fail_paths_from_output "$archived_failures")
+  [ "$(fss_count_nonempty_lines "$archive_fail_paths")" -eq 1 ] || return 1
+  [ "$archive_fail_paths" = "$expected_archive" ]
+}
+
 fss_reset_classification() {
   FSS_REASON_TAGS=""
   FSS_FAIL_LINES=""
