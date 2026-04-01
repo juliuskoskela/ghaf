@@ -239,6 +239,15 @@ let
         chmod 0644 "$rotated_marker"
       }
 
+      restart_journald_for_fss_activation() {
+        # Journald only loads the FSS sealing key at startup. If setup previously
+        # failed before this restart, later retries must still reload journald.
+        echo "Restarting journald to enable sealing..."
+        if ! systemctl restart systemd-journald; then
+          echo "Warning: Journald restart failed - sealing may not be active"
+        fi
+      }
+
       ensure_verification_key_ready() {
         local verify_key
 
@@ -298,6 +307,9 @@ let
         fi
         echo "Setup already complete, verification key present, creating sentinel file"
         publish_setup_state
+        if [ ! -f "$STATE_DIR/fss-rotated" ]; then
+          restart_journald_for_fss_activation
+        fi
         # One-time rotation to move pre-FSS entries to archive (fixes "Bad message")
         rotate_to_clean_fss_state "$JOURNAL_DIR"
         exit 0
@@ -342,16 +354,15 @@ let
         # The sealing key exists now, so keep verify enabled to emit KEY_MISSING
         # even when verification key export failed during initial setup.
         echo "Warning: Verification key missing after key generation. Verify service will alert."
+        restart_journald_for_fss_activation
+        rotate_to_clean_fss_state "$JOURNAL_DIR"
         publish_setup_state
         exit 1
       fi
 
       # Restart journald to pick up the new FSS key
       # Journald only checks for FSS keys at startup, so rotation alone is insufficient
-      echo "Restarting journald to enable sealing..."
-      if ! systemctl restart systemd-journald; then
-        echo "Warning: Journald restart failed - sealing may not be active"
-      fi
+      restart_journald_for_fss_activation
 
       # Rotate so active journal starts clean with FSS (pre-FSS entries become archive)
       rotate_to_clean_fss_state "$JOURNAL_DIR"

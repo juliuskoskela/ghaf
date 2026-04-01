@@ -274,6 +274,21 @@ _: ''
           raise Exception(f"Clock-jump recovery service did not complete successfully: {recover_status}")
       print(f"Clock-jump recovery service completed successfully: {recover_status}")
 
+  with subtest("Clock-jump recovery ignores future wallclock-style cooldown stamps"):
+      machine.succeed("""
+        bash -lc '
+          set -euo pipefail
+          stamp="/run/ghaf-journal-alloy-recover.stamp"
+          echo 999999999999 > "$stamp"
+          systemctl reset-failed ghaf-journal-alloy-recover.service >/dev/null 2>&1 || true
+          systemctl start ghaf-journal-alloy-recover.service >/tmp/ghaf-journal-alloy-recover-future-stamp.log 2>&1
+          systemctl show ghaf-journal-alloy-recover.service --property=Result,ExecMainStatus | grep -F "Result=success"
+          new_stamp=$(cat "$stamp")
+          [ "$new_stamp" != "999999999999" ]
+          [ "$new_stamp" -lt 999999999999 ]
+        '
+      """)
+
   with subtest("Journal files are created"):
       mid = machine.succeed("cat /etc/machine-id").strip()
       exit_code, journal_files = machine.execute(f"ls /var/log/journal/{mid}/*.journal 2>/dev/null || ls /run/log/journal/{mid}/*.journal 2>/dev/null")
@@ -377,11 +392,27 @@ _: ''
               VERIFY_KEY_FILE="$KEY_DIR/verification-key"
               INIT_FILE="$KEY_DIR/initialized"
               MACHINE_ID=$(cat /etc/machine-id)
+              STATE_DIR="/var/log/journal/$MACHINE_ID"
+              ROTATED_MARKER="$STATE_DIR/fss-rotated"
               BACKUP=$(mktemp)
+
+              cleanup() {{
+                if [ -f "$BACKUP" ]; then
+                  cp "$BACKUP" "$VERIFY_KEY_FILE"
+                  chmod 0400 "$VERIFY_KEY_FILE"
+                  rm -f "$BACKUP"
+                fi
+                systemctl reset-failed journal-fss-setup.service journal-fss-verify.service >/dev/null 2>&1 || true
+                systemctl restart journal-fss-setup.service >/dev/null 2>&1 || true
+              }}
+              trap cleanup EXIT
 
               cp "{verify_key_path}" "$BACKUP"
               test -f "$INIT_FILE"
+              test -f "$ROTATED_MARKER"
               rm -f "$VERIFY_KEY_FILE"
+              rm -f "$ROTATED_MARKER"
+              before_missing_invocation=$(systemctl show systemd-journald.service -p InvocationID --value)
 
               set +e
               systemctl restart journal-fss-setup.service >/tmp/journal-fss-setup-missing-key.log 2>&1
@@ -389,7 +420,9 @@ _: ''
               set -e
               [ "$setup_rc" -ne 0 ]
               test -f "$INIT_FILE"
+              [ ! -e "$ROTATED_MARKER" ]
               test -f "/var/log/journal/$MACHINE_ID/fss-config"
+              [ "$(systemctl show systemd-journald.service -p InvocationID --value)" = "$before_missing_invocation" ]
 
               systemctl reset-failed journal-fss-verify.service >/dev/null 2>&1 || true
               set +e
@@ -403,9 +436,53 @@ _: ''
 
               cp "$BACKUP" "$VERIFY_KEY_FILE"
               chmod 0400 "$VERIFY_KEY_FILE"
-              rm -f "$BACKUP"
-              systemctl reset-failed journal-fss-setup.service journal-fss-verify.service >/dev/null 2>&1 || true
-              systemctl restart journal-fss-setup.service >/dev/null 2>&1
+              before_recovery_invocation=$(systemctl show systemd-journald.service -p InvocationID --value)
+              systemctl restart journal-fss-setup.service >/tmp/journal-fss-setup-recovery.log 2>&1
+              after_recovery_invocation=$(systemctl show systemd-journald.service -p InvocationID --value)
+              [ -f "$ROTATED_MARKER" ]
+              [ "$after_recovery_invocation" != "$before_recovery_invocation" ]
+              systemctl reset-failed journal-fss-verify.service >/dev/null 2>&1 || true
+              systemctl start journal-fss-verify.service >/tmp/journal-fss-verify-recovery.log 2>&1
+            '
+          """)
+
+  with subtest("Initial key-generation failure still activates sealing and rotates journals"):
+      if not setup_succeeded:
+          print(f"Skipping initial key-generation failure recovery check because FSS setup did not complete successfully: {setup_status}")
+      else:
+          machine.succeed("""
+            bash -lc '
+              set -euo pipefail
+              KEY_DIR="/persist/common/journal-fss/test-host"
+              VERIFY_KEY_FILE="$KEY_DIR/verification-key"
+              INIT_FILE="$KEY_DIR/initialized"
+              MACHINE_ID=$(cat /etc/machine-id)
+              STATE_DIR="/var/log/journal/$MACHINE_ID"
+              FSS_KEY_FILE="$STATE_DIR/fss"
+              ROTATED_MARKER="$STATE_DIR/fss-rotated"
+              VERIFY_KEY_BACKUP="$KEY_DIR/verification-key.pre-test-backup"
+
+              test -f "$FSS_KEY_FILE"
+              test -f "$VERIFY_KEY_FILE"
+              mv "$VERIFY_KEY_FILE" "$VERIFY_KEY_BACKUP"
+              mkdir "$VERIFY_KEY_FILE"
+              rm -f "$INIT_FILE" "$ROTATED_MARKER" "$FSS_KEY_FILE"
+
+              before_invocation=$(systemctl show systemd-journald.service -p InvocationID --value)
+              set +e
+              systemctl restart journal-fss-setup.service >/tmp/journal-fss-setup-generation-failure.log 2>&1
+              setup_rc=$?
+              set -e
+
+              [ "$setup_rc" -ne 0 ]
+              [ -f "$FSS_KEY_FILE" ]
+              [ -f "$INIT_FILE" ]
+              [ -f "$ROTATED_MARKER" ]
+              after_invocation=$(systemctl show systemd-journald.service -p InvocationID --value)
+              [ "$after_invocation" != "$before_invocation" ]
+
+              rm -rf "$VERIFY_KEY_FILE"
+              mv "$VERIFY_KEY_BACKUP" "$VERIFY_KEY_FILE"
             '
           """)
 

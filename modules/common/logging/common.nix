@@ -53,20 +53,28 @@ let
     name = "ghaf-journal-alloy-recover";
     runtimeInputs = with pkgs; [
       coreutils
+      gawk
       systemd
     ];
     text = ''
       stamp="/run/ghaf-journal-alloy-recover.stamp"
-      now="$(date +%s)"
+      now_ms="$(awk '{printf "%d\n", $1 * 1000}' /proc/uptime)"
       cooldown="${toString recCfg.cooldownSeconds}"
+      cooldown_ms=$((cooldown * 1000))
 
       if [ -e "$stamp" ]; then
         last="$(cat "$stamp" 2>/dev/null || echo 0)"
-        if [ "$((now-last))" -lt "$cooldown" ]; then
+        case "$last" in
+          ""|*[!0-9]*)
+            last=0
+            ;;
+        esac
+
+        if [ "$last" -le "$now_ms" ] && [ "$((now_ms-last))" -lt "$cooldown_ms" ]; then
           exit 0
         fi
       fi
-      echo "$now" > "$stamp"
+      echo "$now_ms" > "$stamp"
 
       systemd-tmpfiles --create --prefix /var/log/journal
       systemctl restart systemd-journald.service
