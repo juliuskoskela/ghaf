@@ -141,6 +141,11 @@ in
     services.timezone.enable = lib.mkDefault (
       timezoneEnabled && globalConfig.platform.timeZone == null
     );
+
+    # The first sensing VM demo keeps capture and derived observations inside
+    # the GPU VM. A deterministic synthetic source lets the service boundary be
+    # demonstrated before the Jetson camera pipeline is passed through.
+    sensing.demo.enable = lib.mkDefault true;
   };
 
   # Jetson CUDA userspace for GPU compute. l4t-cuda ships the userspace CUDA

@@ -29,6 +29,7 @@ _: {
 
     vm-modules.imports = [
       ./common/microvm-store-mode.nix
+      ./common/sensing-demo.nix
       ./common/shared-directory.nix
       ./common/storagevm.nix
       ./common/vm-networking.nix

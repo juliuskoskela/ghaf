@@ -157,6 +157,35 @@ gpu-vm-load 15
 cat /sys/devices/platform/64000000.gpu/load
 ```
 
+### Verify the sensing VM demo
+
+The GPU VM runs a minimal observation service on TCP port `8080`. A synthetic
+camera source lets you test the sensing boundary before camera passthrough is
+available. It publishes derived detections and does not provide a raw-frame
+endpoint.
+
+From a client allowed to reach `gpu-vm`, query the service:
+
+```bash
+curl http://192.168.100.3:8080/healthz
+curl http://192.168.100.3:8080/v1/observations/latest
+```
+
+The health response reports `ready` when the GPU device is available. It
+reports `degraded` when synthetic observations work without the GPU device.
+The observation response includes a schema version, source, sequence number,
+capture time, and typed detections.
+
+The service returns `404` for raw-frame requests:
+
+```bash
+curl --fail-with-body http://192.168.100.3:8080/v1/frames/latest
+```
+
+This demo validates the service boundary only. It does not validate camera
+passthrough or a production perception interface. For the architectural
+decision, see [Jetson Sensing Virtual Machine](/ghaf/overview/arch/adr/jetson-sensing-vm/).
+
 <Aside>
   Use `ssh gpu-vm 'bash -c "..."'`; a **login** shell (`bash -lc`) hangs in the
   NVIDIA CDI profile hook.
