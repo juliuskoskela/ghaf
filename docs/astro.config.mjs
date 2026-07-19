@@ -73,6 +73,7 @@ export default defineConfig({
                         "ghaf/overview/arch/adr/minimal-host",
                         "ghaf/overview/arch/adr/netvm",
                         "ghaf/overview/arch/adr/idsvm",
+                        "ghaf/overview/arch/adr/jetson-sensing-vm",
                         "ghaf/overview/arch/adr/platform-bus-passthrough-support",
                         "ghaf/overview/arch/adr/fss",
                       ],

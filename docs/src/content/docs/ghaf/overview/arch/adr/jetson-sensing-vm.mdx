@@ -1,0 +1,173 @@
+---
+title: Jetson Sensing Virtual Machine
+sidebar:
+  badge:
+    text: Proposed
+    variant: caution
+---
+
+## Status
+
+Proposed. GPU compute passthrough is implemented for development and testing on
+the NVIDIA Jetson AGX Orin. Camera integration and the complete sensing
+interface are not yet implemented.
+
+## Context
+
+Ghaf needs a clear purpose for GPU passthrough on NVIDIA Jetson targets. A
+general-purpose GPU VM does not define which workloads it should run, which
+data it should expose, or how it supports Ghaf's isolation goals.
+
+Jetson targets are a good fit for headless drones, robots, and other autonomous
+devices. These systems use cameras and GPU acceleration for perception. Raw
+sensor data may reveal people, locations, and the device's surroundings. The
+accelerator and its firmware also add a large attack surface.
+
+The Jetson camera pipeline and integrated GPU share platform resources. Their
+hardware coupling can make strong isolation between separate camera and GPU
+VMs impractical. Running the camera pipeline, GPU workloads, or containers on
+the host would weaken the minimal-host design.
+
+The primary user does not need a local accelerated desktop. Operators can
+manage the device and view derived information from a separate client over a
+network. Local display support is therefore not a prerequisite for the Jetson
+use case.
+
+The current GPU passthrough implementation uses a pinned QEMU 10.2 release.
+QEMU provides the required platform-device support and is practical for the
+current prototype. Ghaf also needs a path toward a maintained Virtual Machine
+Monitor (VMM), with crosvm as the leading candidate. This migration depends on
+platform-bus passthrough and device-tree support.
+
+## Decision
+
+Ghaf will define a headless Jetson reference architecture for sensing and
+robotics. The architecture will use a dedicated **sensing VM** as the trust
+boundary for raw sensors and accelerated processing.
+
+The sensing VM will:
+
+- Own the integrated GPU and the camera devices required by the camera pipeline
+- Run trusted applications that acquire and process raw sensor data
+- Keep raw sensor data and direct accelerator access inside the VM by default
+- Publish narrow, typed observations through controlled interfaces
+- Expose only the services that other VMs need
+
+Typed observations can include object detections, classifications, poses,
+alerts, and health information. Each interface must define its schema,
+authorization policy, rate limits, and treatment of sensitive data. Access to
+raw images or video requires an explicit policy and must not be the default.
+
+The remaining system responsibilities will be separated as follows:
+
+| Component | Responsibility |
+| --- | --- |
+| Host | Start, stop, and isolate VMs. The host will not run sensing workloads, Robot Operating System (ROS) workloads, or general application containers. |
+| Sensing VM | Own cameras and GPU resources, process raw data, and publish observations. |
+| ROS or workload VM | Consume observations and run navigation, planning, and application logic without direct access to cameras or the GPU. |
+| Networking VM | Own external network devices and enforce communication paths between the device, its VMs, and operator clients. |
+| Operator client | Provide control panels, monitoring, and visualization over the network. |
+
+The existing `gpu-vm` is the first implementation milestone for the sensing
+VM. It may keep its current name while it only demonstrates GPU compute. The
+reference architecture should use `sensing-vm` once camera ownership and the
+sensing service contract are present.
+
+QEMU 10.2 is an interim implementation choice, not part of the sensing VM
+contract. VMM-specific details must remain behind Ghaf's VM configuration. A
+migration to crosvm will be evaluated separately when the required platform-bus
+support is available.
+
+Direct display output from the sensing VM is outside the initial scope. An
+unaccelerated local control panel or dedicated display device can be evaluated
+if a product requires one. Remote operation remains the default.
+
+Fleet enrollment, provisioning, updates, and policy distribution are required
+for a deployable product. Their protocols and service architecture require
+separate decisions. This ADR only establishes the on-device trust boundaries
+that those services must preserve.
+
+### Initial Demo
+
+The first demo may use a synthetic camera source inside the sensing VM. This
+proves the service boundary without making camera passthrough a prerequisite.
+It does not validate the Jetson camera pipeline or its device isolation.
+
+The demo will provide a small, versioned observation service with these
+properties:
+
+- A health response identifies the active sensor mode and accelerator status
+- A latest-observation response contains a sequence number and capture time
+- Synthetic detections use the same envelope intended for a real camera source
+- No endpoint returns raw frames or direct accelerator access
+- A missing or failed source makes the service unhealthy instead of publishing stale data as current
+
+The demo protocol is not a production interface. Authentication, transport
+security, schema governance, and inter-VM policy need follow-up decisions before
+applications depend on it.
+
+### Failure Behavior
+
+Consumers must treat observations as untrusted input and reject stale data.
+Each observation must identify its source, sequence, and capture time. The
+sensing service must report degraded accelerator or sensor state through its
+health interface.
+
+A sensing VM failure must not grant another VM access to its devices. Restarting
+the sensing VM may interrupt observations, but it must preserve the host and
+other VM boundaries. Safety-critical control must define behavior for missing
+observations outside this ADR.
+
+### Non-Goals
+
+This decision does not define:
+
+- Direct display output or a local accelerated desktop
+- Flight control, actuator ownership, or functional-safety requirements
+- A production perception API or machine-learning model
+- Camera passthrough implementation details
+- Fleet service protocols
+
+## Consequences
+
+The architecture provides a concrete purpose for GPU and camera passthrough.
+It also gives application developers a stable contract based on observations
+instead of hardware access.
+
+Compromise of a ROS or application workload will not automatically expose raw
+camera data or the GPU. The host also remains smaller because it does not carry
+camera, CUDA, ROS, or container workloads.
+
+The sensing VM becomes a high-value component. Its guest kernel, NVIDIA driver
+stack, camera services, and trusted applications require strict maintenance
+and update policies. Its service interfaces require security review.
+
+Placing cameras and the GPU in one VM accepts the isolation limit created by
+the Jetson hardware pipeline. Trusted applications inside that VM share a
+security domain unless Ghaf adds stronger in-guest isolation.
+
+Typed interfaces add design and integration work. Application teams cannot
+assume direct access to raw sensors or CUDA. Debugging across VM boundaries is
+also more complex.
+
+The first reference target is the NVIDIA Jetson AGX Orin. Other Jetson models
+may need different device assignments, network adapters, or passthrough
+support. They must demonstrate the same trust boundaries before inclusion in
+the reference architecture.
+
+The QEMU dependency remains technical debt. Moving to crosvm requires the work
+described in [Platform Bus for Rust VMM](/ghaf/overview/arch/adr/platform-bus-passthrough-support).
+
+## Validation Criteria
+
+The proposal is ready for acceptance when the project agrees on these points:
+
+- The sensing VM is the exclusive owner of the integrated GPU and camera pipeline
+- GPU compute works without a host graphics or CUDA stack
+- A trusted sensing application can consume a camera and publish a typed observation
+- A separate workload VM can consume that observation without raw sensor or GPU access
+- External access flows through the networking VM under an explicit policy
+- Restart, update, logging, and failure behavior are defined for the sensing VM
+- Consumers can distinguish current observations from stale or unavailable data
+
+For the current GPU passthrough implementation, see [NVIDIA Jetson AGX Orin GPU Passthrough to gpu-vm](/ghaf/dev/technologies/nvidia_gpu_vm/).
