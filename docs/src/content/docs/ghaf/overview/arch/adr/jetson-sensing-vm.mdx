@@ -94,7 +94,7 @@ The first demo uses a synthetic camera source inside the sensing VM. This
 proves the service boundary without making camera passthrough a prerequisite.
 It does not validate the Jetson camera pipeline or its device isolation.
 
-The demo will provide a small, versioned observation service with these
+The demo provides a small, versioned observation service with these
 properties:
 
 - A health response identifies the active sensor mode and accelerator status
@@ -111,6 +111,28 @@ The reference image is exposed as the
 `nvidia-jetson-orin-agx-sensing-demo-debug-from-x86_64` flake package. It starts
 `sensing-vm` instead of `gpu-vm`; the existing AGX targets continue to start
 `gpu-vm` unchanged.
+
+### Prototype Validation Evidence
+
+The reference image was flashed to a Jetson AGX Orin and validated on hardware
+on 2026-07-20. This evidence covers the synthetic-source milestone, not camera
+passthrough or a production perception interface.
+
+| Check | Evidence | Result |
+| --- | --- | --- |
+| VM and network wiring | `net-vm` received a LAN address through its passed-through Ethernet controller and reached `sensing-vm` at `192.168.100.3:8080`. | Pass |
+| Service lifecycle | `sensing-demo.service` remained active with no failures or restarts during validation. | Pass |
+| Health contract | `GET /healthz` returned schema `ghaf.sensing.health.v1`, source mode `synthetic`, accelerator `available`, and overall status `ready`. | Pass |
+| Observation contract | `GET /v1/observations/latest` returned schema `ghaf.sensing.observation.v1`, capture time, detection data, and increasing sequence numbers. | Pass |
+| GPU availability and compute | GPU device nodes were present in `sensing-vm`. The CUDA smoke test identified compute capability `sm_87` and completed with `GPU_LOAD_OK`. | Pass |
+| Raw-data boundary | Observation and health responses reported `raw_sensor_data_exported: false`; `GET /v1/frames/latest` returned HTTP 404. | Pass |
+| Inter-VM consumption | Requests issued from `net-vm` to both sensing endpoints returned current data successfully. | Pass |
+
+The test used the synthetic source at two observations per second. It therefore
+demonstrates GPU passthrough, guest-local sensing execution, typed output, and
+the `net-vm` to `sensing-vm` service path. It does not demonstrate camera
+ownership, camera capture, a separate ROS or workload VM, authentication,
+transport security, or production policy enforcement.
 
 ### Failure Behavior
 
