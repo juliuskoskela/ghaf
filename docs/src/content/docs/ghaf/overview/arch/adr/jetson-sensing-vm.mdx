@@ -33,11 +33,12 @@ manage the device and view derived information from a separate client over a
 network. Local display support is therefore not a prerequisite for the Jetson
 use case.
 
-The current GPU passthrough implementation uses a pinned QEMU 10.2 release.
-QEMU provides the required platform-device support and is practical for the
-current prototype. Ghaf also needs a path toward a maintained Virtual Machine
-Monitor (VMM), with crosvm as the leading candidate. This migration depends on
-platform-bus passthrough and device-tree support.
+The current GPU passthrough implementation uses QEMU 10.1.5. This is the last
+release before QEMU removed `vfio-platform` support. QEMU provides the required
+platform-device support and is practical for the current prototype. Ghaf also
+needs a path toward a maintained Virtual Machine Monitor (VMM), with crosvm as
+the leading candidate. This migration depends on platform-bus passthrough and
+device-tree support.
 
 ## Decision
 
@@ -73,7 +74,7 @@ VM. It may keep its current name while it only demonstrates GPU compute. The
 reference architecture should use `sensing-vm` once camera ownership and the
 sensing service contract are present.
 
-QEMU 10.2 is an interim implementation choice, not part of the sensing VM
+QEMU 10.1.5 is an interim implementation choice, not part of the sensing VM
 contract. VMM-specific details must remain behind Ghaf's VM configuration. A
 migration to crosvm will be evaluated separately when the required platform-bus
 support is available.

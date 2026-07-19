@@ -18,6 +18,7 @@
 {
   ghaf-qemu,
   fetchurl,
+  lib,
   extraPatches ? [ ],
   variantName ? "",
   ...
@@ -32,7 +33,15 @@ ghaf-qemu.overrideAttrs (
       hash = "sha256-HxIJtNuC5sRBfq9ufgsHNWNXKgQtn7dJKwhLplqcBpM=";
     };
 
-    patches = (prev.patches or [ ]) ++ [ ./patches/0001-nvidia-bpmp-guest-hooks.patch ] ++ extraPatches;
+    # The BPMP variants are ARM-only. ghaf-qemu adds experimental x86 ACPI
+    # device patches when this package is evaluated on x86_64, but those patches
+    # target current QEMU and do not apply to this pinned 10.1 tree. Filter them
+    # so the standalone flake package has the same effective patch set as the
+    # aarch64 Jetson build.
+    patches =
+      lib.filter (patch: !(lib.hasInfix "hw-acpi" (baseNameOf (toString patch)))) (prev.patches or [ ])
+      ++ [ ./patches/0001-nvidia-bpmp-guest-hooks.patch ]
+      ++ extraPatches;
 
     # The device is carried as source rather than as ~180 lines of `+` in a diff.
     postPatch = (prev.postPatch or "") + ''
