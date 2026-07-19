@@ -13,6 +13,7 @@ _: {
       ./host/microvm-host.nix
       ./sysvms/netvm.nix
       ./sysvms/gpuvm.nix
+      ./sysvms/sensingvm.nix
       ./sysvms/adminvm.nix
       ./appvm.nix
       ./sysvms/guivm.nix
@@ -92,6 +93,9 @@ _: {
     #     .extendModules { modules = [ ... ]; }
     gpuvm-base = ./sysvms/gpuvm-base.nix;
 
+    # Sensing VM base: Jetson GPU runtime plus the observation service.
+    sensingvm-base = ./sysvms/sensingvm-base.nix;
+
     # App VM base module for layered composition
     # Unlike singleton VMs, App VMs are instantiated multiple times using mkAppVm.
     # Use with extendModules pattern:
@@ -160,6 +164,12 @@ _: {
     # IDS VM - Intrusion Detection System
     # Requires: Network tap access
     idsvm = ./sysvms/idsvm/idsvm-base.nix;
+
+    # GPU VM - generic Jetson GPU compute guest.
+    gpuvm = ./sysvms/gpuvm-base.nix;
+
+    # Sensing VM - isolated sensor capture and inference boundary on Jetson.
+    sensingvm = ./sysvms/sensingvm-base.nix;
 
     # App VM - Template for application VMs
     # Instantiated multiple times (chrome-vm, comms-vm, etc.)

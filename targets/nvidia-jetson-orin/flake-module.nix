@@ -89,6 +89,29 @@ let
       };
     })
 
+    # Headless reference target: sensing-vm owns the GPU and publishes
+    # synthetic camera observations while camera passthrough is being enabled.
+    (ghaf-configuration {
+      name = "nvidia-jetson-orin-agx-sensing-demo";
+      inherit system;
+      profile = "orin";
+      hardwareModule = self.nixosModules.hardware-nvidia-jetson-orin-agx;
+      variant = "debug";
+      extraModules = commonModules;
+      extraConfig = {
+        hardware.nvidia.passthroughs = {
+          gpu_vm.enable = lib.mkForce false;
+          sensing_vm.enable = true;
+        };
+        reference.host-demo-apps.demo-apps.enableDemoApplications = lib.mkForce false;
+        reference.profiles.mvp-orinuser-trial.enable = true;
+      };
+      vmConfig.sysvms.sensingvm = {
+        mem = 6000;
+        vcpu = 4;
+      };
+    })
+
     (ghaf-configuration {
       name = "nvidia-jetson-orin-agx64";
       inherit system;

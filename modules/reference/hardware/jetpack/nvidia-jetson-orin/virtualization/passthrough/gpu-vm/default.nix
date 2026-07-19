@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2022-2026 TII (SSRC) and the Ghaf contributors
 # SPDX-License-Identifier: Apache-2.0
 #
-# Pass the AGX Orin's on-SoC GPU (ga10b) and supporting engines to gpu-vm.
+# Assign the AGX Orin's on-SoC GPU (ga10b) and supporting engines to one VM.
 #
 # Data:    vfio-platform hands the GPU + host1x/vic/nvdec/nvjpg/dce + three
 #          reserved-memory carveouts to the guest. The carveouts use mmio-base
@@ -18,7 +18,20 @@
   ...
 }:
 let
-  cfg = config.ghaf.hardware.nvidia.passthroughs.gpu_vm;
+  gpuCfg = config.ghaf.hardware.nvidia.passthroughs.gpu_vm;
+  sensingCfg = config.ghaf.hardware.nvidia.passthroughs.sensing_vm;
+  enabled = gpuCfg.enable || sensingCfg.enable;
+  owner =
+    if sensingCfg.enable then
+      {
+        attr = "sensingvm";
+        name = "sensing-vm";
+      }
+    else
+      {
+        attr = "gpuvm";
+        name = "gpu-vm";
+      };
   # Host-side virtualization config (sourcesPatch is defined here, not on the
   # guest). Captured from the host scope so the guest extraModules below can
   # reference it without the inner `config` shadow picking up the guest config.
@@ -115,11 +128,27 @@ in
     description = "Pass the Tegra234 GPU and engines through to gpu-vm on NVIDIA Orin AGX";
   };
 
-  config = lib.mkIf cfg.enable {
+  options.ghaf.hardware.nvidia.passthroughs.sensing_vm.enable = lib.mkOption {
+    type = lib.types.bool;
+    default = false;
+    description = "Pass the Tegra234 GPU and multimedia engines through to sensing-vm";
+  };
+
+  config = lib.mkIf enabled {
+    assertions = [
+      {
+        assertion = !(gpuCfg.enable && sensingCfg.enable);
+        message = ''
+          gpu-vm and sensing-vm cannot simultaneously own the Tegra234 GPU.
+          Enable exactly one of gpu_vm or sensing_vm passthrough.
+        '';
+      }
+    ];
+
     ghaf.hardware.nvidia.virtualization.host.bpmp.enable = true;
 
-    # Register the gpu-vm microvm now that its extraModules are populated below.
-    ghaf.virtualization.microvm.gpuvm.enable = true;
+    # Register only the selected owner after its hardware layer is populated.
+    ghaf.virtualization.microvm.${owner.attr}.enable = true;
 
     # GPU BPMP allow-list contribution. Raw bpmp ids read from the live host
     # device tree (od -t u4 --endian=big on each node's clocks/resets/
@@ -202,7 +231,7 @@ in
     systemd.services.bindGpuVm = {
       description = "Bind GPU devices to the vfio-platform driver";
       wantedBy = [ "multi-user.target" ];
-      before = [ "microvm@gpu-vm.service" ];
+      before = [ "microvm@${owner.name}.service" ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = "yes";
@@ -215,7 +244,7 @@ in
         ) allDevs;
       };
     };
-    systemd.services."microvm@gpu-vm".after = [ "bindGpuVm.service" ];
+    systemd.services."microvm@${owner.name}".after = [ "bindGpuVm.service" ];
 
     # Host DT overlay exposing the GPU nodes to passthrough.
     hardware.deviceTree.overlays = [
@@ -225,8 +254,8 @@ in
       }
     ];
 
-    # Guest configuration for the gpu-vm microvm.
-    ghaf.hardware.definition.gpuvm.extraModules = [
+    # Guest configuration for the selected GPU-owning microVM.
+    ghaf.hardware.definition.${owner.attr}.extraModules = [
       (
         { config, pkgs, ... }:
         {

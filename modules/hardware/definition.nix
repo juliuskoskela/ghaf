@@ -468,5 +468,19 @@ in
           '';
         };
       };
+
+      sensingvm = {
+        extraModules = mkOption {
+          description = ''
+            Hardware-specific NixOS modules for sensing-vm, including Jetson
+            GPU, multimedia-engine, and future camera passthrough settings.
+
+            For resources and workload policy, use
+            ghaf.virtualization.vmConfig.sysvms.sensingvm instead.
+          '';
+          type = types.listOf types.unspecified;
+          default = [ ];
+        };
+      };
     };
 }

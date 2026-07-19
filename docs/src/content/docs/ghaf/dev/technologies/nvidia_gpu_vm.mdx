@@ -1,15 +1,19 @@
 ---
-title: NVIDIA Jetson AGX Orin GPU Passthrough to gpu-vm
+title: NVIDIA Jetson AGX Orin GPU Passthrough
 sidebar:
-  label: GPU Passthrough to gpu-vm
+  label: Jetson GPU Passthrough
 ---
 
 This document describes how the AGX Orin's integrated GPU (`ga10b`,
 `gpu@17000000`) and its host1x multimedia engines are passed through to a
-dedicated `gpu-vm` microVM, so CUDA compute runs inside an isolated guest
+one dedicated microVM, so CUDA compute runs inside an isolated guest
 instead of on the host. It is built to coexist with the MGBE0 ethernet
 passthrough (`net-vm`): both share the same BPMP-virtualisation and
 `ghaf-qemu-bpmp` infrastructure.
+
+Normal AGX targets assign the GPU to `gpu-vm`. The sensing demo target assigns
+the same hardware layer to the separate `sensing-vm`; both owners cannot be
+enabled together.
 
 import { Aside } from "@astrojs/starlight/components";
 
@@ -32,7 +36,7 @@ rather than `vfio-pci`. Five things must line up for the guest driver to bind
 and for CUDA to initialise.
 
 ```
-            HOST (Jetson L4T kernel 6.6)                 GUEST gpu-vm (vanilla 6.12 + nvidia-oot)
+            HOST (Jetson L4T kernel 6.6)             GUEST GPU owner (vanilla 6.12 + nvidia-oot)
   +---------------------------------------+   +------------------------------------------------+
   |  GPU/host1x/vic/nvdec/nvjpg           |   |  gk20a (nvgpu) + nvhost + nvmap  -> /dev/nvgpu  |
   |    released from host, bound to       |   |        ^            ^                           |
@@ -82,7 +86,8 @@ requests are proxied:
 </Aside>
 
 The allow-list is a union contributed by each passthrough: `net-vm` adds
-MGBE0's IDs, `gpu-vm` adds the GPU/engine IDs. Never use `bpmpAllowAllDomains` —
+MGBE0's IDs, while the selected GPU owner adds the GPU/engine IDs. Never use
+`bpmpAllowAllDomains` —
 an over-broad guest could gate the host's own clocks. `clk_ignore_unused
 pd_ignore_unused` on the guest keeps probe-time churn from disabling shared
 resources. See also
@@ -99,7 +104,7 @@ don't autoload, so they are forced via `boot.kernelModules` and
 
 ### CUDA userspace
 
-`gpuvm-base.nix` ships the Jetson CUDA userspace (`l4t-cuda`, `l4t-tools`,
+The shared Jetson GPU guest base ships the CUDA userspace (`l4t-cuda`, `l4t-tools`,
 `cuda_cudart`, `cuda_nvcc`). The desktop `cudaPackages` pull in `cuda_compat`,
 whose `libcuda.so.1` wins the `system-path` collision over `l4t-cuda`'s native
 driver but cannot locate the full native L4T driver stack (`libnvcucompat` plus
@@ -124,6 +129,15 @@ Set in the AGX SoM files (`orin-agx.nix`, `orin-agx64.nix`,
 
 ```nix
 ghaf.hardware.nvidia.passthroughs.gpu_vm.enable = true;
+```
+
+For a sensing target, disable that default and select the sensing owner:
+
+```nix
+ghaf.hardware.nvidia.passthroughs = {
+  gpu_vm.enable = lib.mkForce false;
+  sensing_vm.enable = true;
+};
 ```
 
 ### Build and flash
@@ -159,12 +173,18 @@ cat /sys/devices/platform/64000000.gpu/load
 
 ### Verify the sensing VM demo
 
-The GPU VM runs a minimal observation service on TCP port `8080`. A synthetic
+Build the dedicated reference image:
+
+```bash
+nix build .#nvidia-jetson-orin-agx-sensing-demo-debug-from-x86_64
+```
+
+The sensing VM runs a minimal observation service on TCP port `8080`. A synthetic
 camera source lets you test the sensing boundary before camera passthrough is
 available. It publishes derived detections and does not provide a raw-frame
 endpoint.
 
-From a client allowed to reach `gpu-vm`, query the service:
+From a client allowed to reach `sensing-vm` (`192.168.100.3`), query the service:
 
 ```bash
 curl http://192.168.100.3:8080/healthz

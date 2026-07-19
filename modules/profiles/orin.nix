@@ -97,6 +97,12 @@ in
         Profiles can extend this with extendModules if customization needed.
       '';
     };
+
+    sensingvmBase = lib.mkOption {
+      type = lib.types.unspecified;
+      readOnly = true;
+      description = "Orin sensing VM base configuration.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -174,6 +180,27 @@ in
             hostConfig = lib.ghaf.vm.mkHostConfig {
               inherit config;
               vmName = "gpu-vm";
+            };
+          };
+        };
+
+        orin.sensingvmBase = lib.nixosSystem {
+          modules = [
+            inputs.microvm.nixosModules.microvm
+            inputs.self.nixosModules.sensingvm-base
+            {
+              nixpkgs = {
+                hostPlatform.system = "aarch64-linux";
+                inherit (config.nixpkgs) overlays config;
+              };
+            }
+          ];
+          specialArgs = lib.ghaf.vm.mkSpecialArgs {
+            inherit lib inputs;
+            globalConfig = hostGlobalConfig;
+            hostConfig = lib.ghaf.vm.mkHostConfig {
+              inherit config;
+              vmName = "sensing-vm";
             };
           };
         };
@@ -273,6 +300,16 @@ in
                 inherit config;
                 vmName = "gpuvm";
               };
+            };
+          };
+
+          # Enable is selected by the Jetson GPU passthrough owner. Keeping the
+          # evaluated config available here makes sensing-vm composable through
+          # the same hardware/vmConfig layering as every other system VM.
+          sensingvm.evaluatedConfig = cfg.sensingvmBase.extendModules {
+            modules = lib.ghaf.vm.applyVmConfig {
+              inherit config;
+              vmName = "sensingvm";
             };
           };
 
