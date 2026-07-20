@@ -114,10 +114,12 @@ for command_name in nixos-rebuild ssh ssh-keygen; do
 done
 
 if [[ $reboot_after_stage == true ]]; then
-  if ! command -v minicom >/dev/null; then
-    printf 'Required command is unavailable: minicom\n' >&2
-    exit 1
-  fi
+  for command_name in minicom stty; do
+    if ! command -v "$command_name" >/dev/null; then
+      printf 'Required command is unavailable: %s\n' "$command_name" >&2
+      exit 1
+    fi
+  done
   if [[ ! -c $uart_device || ! -r $uart_device || ! -w $uart_device ]]; then
     printf 'UART device is not accessible: %s\n' "$uart_device" >&2
     printf 'Check the micro-USB debug cable and dialout-group membership.\n' >&2
@@ -360,14 +362,18 @@ if [[ $reboot_after_stage == true ]]; then
   minicom_script="$deploy_tmpdir/reboot.runscript"
   cat >"$minicom_script" <<'MINICOM_SCRIPT'
 verbose on
-timeout 30
+timeout 120
 
+send ""
+sleep 1
+send ""
+sleep 1
 send ""
 expect {
   "login:" goto login
   "$ " goto user_shell
   "# " goto root_shell
-  timeout 30 goto failed
+  timeout 20 goto failed
 }
 
 login:
@@ -412,6 +418,17 @@ MINICOM_SCRIPT
 
   export GHAF_UART_LOGIN="$uart_user"
   export GHAF_UART_PASS="$uart_password"
+  stty \
+    --file "$uart_device" \
+    raw \
+    -echo \
+    115200 \
+    cs8 \
+    -cstopb \
+    -parenb \
+    -crtscts \
+    -ixon \
+    -ixoff
   printf 'Opening %s at 115200 baud; capture log: %s\n' "$uart_device" "$uart_log"
   printf 'Minicom will issue the reboot and remain attached. Exit with Ctrl-A X.\n'
   minicom \
