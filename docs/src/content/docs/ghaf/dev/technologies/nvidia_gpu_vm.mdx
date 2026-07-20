@@ -154,15 +154,30 @@ sudo -E $(which nix) run \
 ### Stage a sensing-demo update for reboot
 
 The AGX passthrough target must not hot-switch or restart the GPU-owning VM.
-For development updates, the guarded helper uploads the closure with
-`nixos-rebuild boot`, preserves the working kernel, initrd, and DTB directives,
-and creates a one-shot loader entry whose only change is the new system
-`init=` path:
+For development updates, the guarded helper builds and uploads the latest local
+closure with `nixos-rebuild boot`, preserves the working kernel, initrd, and DTB
+directives, and creates a one-shot loader entry whose only change is the new
+system `init=` path. With `--reboot`, it logs into the host through the debug
+UART, requests the reboot, and leaves minicom attached to monitor the next boot:
 
 ```bash
 scripts/deploy-sensing-demo-boot.sh --check
 scripts/deploy-sensing-demo-boot.sh --reboot
 ```
+
+The UART defaults to `/dev/ttyACM0` at 115200 baud and the debug credentials
+`ghaf` / `ghaf`. Override them without putting the password on the command line:
+
+```bash
+GHAF_UART_PASSWORD='<password>' \
+  scripts/deploy-sensing-demo-boot.sh \
+    --uart-device /dev/ttyACM0 \
+    --uart-log .idea/sensing-demo-reboot.log \
+    --reboot
+```
+
+Exit minicom with <kbd>Ctrl</kbd>+<kbd>A</kbd>, then <kbd>X</kbd>, after the new
+login prompt appears.
 
 If the staged boot fails, reset the board again to use the unchanged default
 entry. After validating the new generation, make it persistent explicitly:

@@ -10,6 +10,10 @@ flake_target=".#nvidia-jetson-orin-agx-sensing-demo-debug-from-x86_64"
 identity_file="${HOME}/.ssh/ghaf-vega"
 action="stage"
 reboot_after_stage=false
+uart_device="${GHAF_UART_DEVICE:-/dev/ttyACM0}"
+uart_user="${GHAF_UART_USER:-ghaf}"
+uart_password="${GHAF_UART_PASSWORD:-ghaf}"
+uart_log="${GHAF_UART_LOG:-}"
 
 usage() {
   cat <<'EOF'
@@ -25,7 +29,10 @@ Options:
   --host-ip ADDRESS     Ghaf host address behind net-vm (default: 192.168.100.2)
   --identity PATH       SSH private key (default: ~/.ssh/ghaf-vega)
   --flake TARGET        NixOS flake target
-  --reboot              Request a normal reboot after staging
+  --reboot              Reboot through the debug UART and monitor with minicom
+  --uart-device PATH    Debug UART device (default: /dev/ttyACM0)
+  --uart-user USER      Debug-console user (default: ghaf)
+  --uart-log PATH       Minicom capture log (default: a timestamped /tmp file)
   --check               Validate SSH and the current boot entry without changes
   --promote             Make a successfully booted staged entry persistent
   -h, --help            Show this help
@@ -33,6 +40,10 @@ Options:
 The staged generation is a one-shot systemd-boot entry. If it fails, reset the
 board and the following boot returns to the previous default entry. Run
 --promote only after the new generation and sensing demo have been verified.
+
+The UART password is read from GHAF_UART_PASSWORD and defaults to the debug
+image password "ghaf". Minicom remains open after issuing the reboot; exit it
+with Ctrl-A X after the new login prompt appears.
 EOF
 }
 
@@ -57,6 +68,18 @@ while (($# > 0)); do
   --reboot)
     reboot_after_stage=true
     shift
+    ;;
+  --uart-device)
+    uart_device="${2:?--uart-device requires a value}"
+    shift 2
+    ;;
+  --uart-user)
+    uart_user="${2:?--uart-user requires a value}"
+    shift 2
+    ;;
+  --uart-log)
+    uart_log="${2:?--uart-log requires a value}"
+    shift 2
     ;;
   --check)
     action="check"
@@ -89,6 +112,18 @@ for command_name in nixos-rebuild ssh ssh-keygen; do
     exit 1
   fi
 done
+
+if [[ $reboot_after_stage == true ]]; then
+  if ! command -v minicom >/dev/null; then
+    printf 'Required command is unavailable: minicom\n' >&2
+    exit 1
+  fi
+  if [[ ! -c $uart_device || ! -r $uart_device || ! -w $uart_device ]]; then
+    printf 'UART device is not accessible: %s\n' "$uart_device" >&2
+    printf 'Check the micro-USB debug cable and dialout-group membership.\n' >&2
+    exit 1
+  fi
+fi
 
 deploy_tmpdir=$(mktemp -d)
 trap 'rm -rf -- "$deploy_tmpdir"' EXIT
@@ -318,8 +353,75 @@ printf '\nUpload and one-shot boot staging completed successfully.\n'
 printf 'If the next boot fails, reset the board once more to return to the old default.\n'
 
 if [[ $reboot_after_stage == true ]]; then
-  printf 'Requesting a normal reboot. If VFIO teardown stalls, use the physical Reset button.\n'
-  "${ssh_host[@]}" systemctl reboot || true
+  if [[ -z $uart_log ]]; then
+    uart_log="/tmp/ghaf-jetson-reboot-$(date -u +%Y%m%dT%H%M%SZ).log"
+  fi
+  mkdir -p -- "$(dirname -- "$uart_log")"
+  minicom_script="$deploy_tmpdir/reboot.runscript"
+  cat >"$minicom_script" <<'MINICOM_SCRIPT'
+verbose on
+timeout 30
+
+send ""
+expect {
+  "login:" goto login
+  "$ " goto user_shell
+  "# " goto root_shell
+  timeout 30 goto failed
+}
+
+login:
+send "$(GHAF_UART_LOGIN)"
+expect {
+  "Password:" send "$(GHAF_UART_PASS)"
+  timeout 15 goto failed
+}
+expect {
+  "$ " goto user_shell
+  "# " goto root_shell
+  "Login incorrect" goto failed
+  timeout 15 goto failed
+}
+
+user_shell:
+send "sudo -S -p UART-SUDO-PASSWORD: systemctl reboot"
+expect {
+  "UART-SUDO-PASSWORD:" goto sudo_password
+  "Rebooting" goto done
+  timeout 5 goto done
+}
+
+sudo_password:
+send "$(GHAF_UART_PASS)"
+sleep 2
+goto done
+
+root_shell:
+send "systemctl reboot"
+sleep 2
+goto done
+
+failed:
+print "UART automation could not reach a shell; reboot manually in minicom."
+exit 2
+
+done:
+print "Reboot requested. Minicom will remain attached for boot monitoring."
+exit 0
+MINICOM_SCRIPT
+
+  export GHAF_UART_LOGIN="$uart_user"
+  export GHAF_UART_PASS="$uart_password"
+  printf 'Opening %s at 115200 baud; capture log: %s\n' "$uart_device" "$uart_log"
+  printf 'Minicom will issue the reboot and remain attached. Exit with Ctrl-A X.\n'
+  minicom \
+    --device "$uart_device" \
+    --baudrate 115200 \
+    --8bit \
+    --wrap \
+    --noinit \
+    --capturefile "$uart_log" \
+    --script "$minicom_script"
 else
-  printf 'Reboot was not requested. Re-run with --reboot or reset the board when ready.\n'
+  printf 'Reboot was not requested. Re-run with --reboot when ready.\n'
 fi
