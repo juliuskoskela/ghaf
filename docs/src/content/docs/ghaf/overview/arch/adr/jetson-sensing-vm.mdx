@@ -90,9 +90,12 @@ that those services must preserve.
 
 ### Initial Demo
 
-The first demo uses a synthetic camera source inside the sensing VM. This
-proves the service boundary without making camera passthrough a prerequisite.
-It does not validate the Jetson camera pipeline or its device isolation.
+The first demo uses a synthetic RGB producer inside the sensing VM. It renders
+real pixel buffers for simple traffic scenes. A separate reference processor
+derives person, vehicle, and obstacle semantics from those pixels without
+reading producer ground truth. This proves the internal processing and service
+boundaries without making camera passthrough a prerequisite. It does not
+validate the Jetson camera pipeline or its device isolation.
 
 The demo provides a small, versioned observation service with these
 properties:
@@ -100,12 +103,16 @@ properties:
 - A health response identifies the active sensor mode and accelerator status
 - A latest-observation response contains a sequence number and capture time
 - Synthetic detections use the same envelope intended for a real camera source
+- A demo response compares producer intent with independently derived semantics
+- A visual demo reconstructs both views from metadata without exporting pixels
 - No endpoint returns raw frames or direct accelerator access
 - A missing or failed source makes the service unhealthy instead of publishing stale data as current
 
 The demo protocol is not a production interface. Authentication, transport
 security, schema governance, and inter-VM policy need follow-up decisions before
-applications depend on it.
+applications depend on it. The reference processor uses deterministic color
+segmentation and explicitly reports that it does not use the accelerator. A
+future TensorRT or DeepStream processor can replace it behind the same boundary.
 
 The reference image is exposed as the
 `nvidia-jetson-orin-agx-sensing-demo-debug-from-x86_64` flake package. It starts
@@ -117,6 +124,10 @@ The reference image is exposed as the
 The reference image was flashed to a Jetson AGX Orin and validated on hardware
 on 2026-07-20. This evidence covers the synthetic-source milestone, not camera
 passthrough or a production perception interface.
+
+That run covered the original observation generator. The pixel-based producer
+and receiver described above have passed package and complete target builds,
+but require the same on-device checks after the upgraded image is flashed.
 
 | Check | Evidence | Result |
 | --- | --- | --- |

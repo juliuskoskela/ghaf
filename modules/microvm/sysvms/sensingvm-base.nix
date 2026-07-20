@@ -7,8 +7,7 @@
 {
   imports = [ ./jetson-gpu-base.nix ];
 
-  # Synthetic capture proves the sensing boundary without requiring camera
-  # passthrough. Replace the source behind this interface when CSI/USB camera
-  # ownership is available.
+  # Synthetic RGB frames prove the producer/processor boundary without camera
+  # passthrough. Replace the source when CSI/USB camera ownership is available.
   ghaf.sensing.demo.enable = lib.mkDefault true;
 }

@@ -179,22 +179,43 @@ Build the dedicated reference image:
 nix build .#nvidia-jetson-orin-agx-sensing-demo-debug-from-x86_64
 ```
 
-The sensing VM runs a minimal observation service on TCP port `8080`. A synthetic
-camera source lets you test the sensing boundary before camera passthrough is
-available. It publishes derived detections and does not provide a raw-frame
-endpoint.
+The sensing VM runs a minimal producer/receiver service on TCP port `8080`.
+Before camera passthrough is available, a producer renders deterministic RGB
+traffic scenes containing a person, vehicle, and obstacle. A separate receiver
+derives semantic detections from the generated pixels. It does not read the
+producer's scene metadata and the service does not provide a raw-frame endpoint.
 
 From a client allowed to reach `sensing-vm` (`192.168.100.3`), query the service:
 
 ```bash
 curl http://192.168.100.3:8080/healthz
 curl http://192.168.100.3:8080/v1/observations/latest
+curl http://192.168.100.3:8080/v1/demo/latest
 ```
 
 The health response reports `ready` when the GPU device is available. It
-reports `degraded` when synthetic observations work without the GPU device.
-The observation response includes a schema version, source, sequence number,
-capture time, and typed detections.
+reports `degraded` when synthetic processing works without the GPU device. The
+observation response includes a schema version, source, sequence number,
+capture time, and typed detections. The demo response shows the producer's
+declared scene, the receiver's independently detected semantics, and whether
+the labels match. A frame hash proves both views refer to the same RGB buffer.
+
+The processor is deliberately identified as `reference-color-segmentation` and
+reports `uses_accelerator: false`. GPU availability and the separate
+`gpu-vm-load` smoke test must not be interpreted as GPU inference by this demo.
+The receiver boundary can later host a TensorRT or DeepStream implementation
+without changing the observation endpoint.
+
+The service also provides a small visual comparison at `/demo`. From a client
+that can SSH to `net-vm`, forward the internal endpoint and open
+`http://localhost:8080/demo`:
+
+```bash
+ssh -L 8080:192.168.100.3:8080 ghaf@<net-vm-lan-address>
+```
+
+The page reconstructs the synthetic scene and receiver overlays from metadata;
+raw RGB pixels remain inside `sensing-vm`.
 
 The service returns `404` for raw-frame requests:
 
@@ -202,9 +223,10 @@ The service returns `404` for raw-frame requests:
 curl --fail-with-body http://192.168.100.3:8080/v1/frames/latest
 ```
 
-This demo validates the service boundary only. It does not validate camera
-passthrough or a production perception interface. For the architectural
-decision, see [Jetson Sensing Virtual Machine](/ghaf/overview/arch/adr/jetson-sensing-vm/).
+This demo validates a real pixel-processing path and the service boundary. Its
+color segmentation is deterministic test logic, not an AI model. It does not
+validate camera passthrough or a production perception interface. For the
+architectural decision, see [Jetson Sensing Virtual Machine](/ghaf/overview/arch/adr/jetson-sensing-vm/).
 
 <Aside>
   Use `ssh gpu-vm 'bash -c "..."'`; a **login** shell (`bash -lc`) hangs in the

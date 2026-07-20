@@ -13,7 +13,7 @@ in
   _file = ./sensing-demo.nix;
 
   options.ghaf.sensing.demo = {
-    enable = lib.mkEnableOption "the synthetic camera sensing VM demo";
+    enable = lib.mkEnableOption "the synthetic RGB sensing VM demo";
 
     listenAddress = lib.mkOption {
       type = lib.types.str;
@@ -30,7 +30,7 @@ in
     framesPerSecond = lib.mkOption {
       type = lib.types.ints.positive;
       default = 2;
-      description = "Synthetic camera capture rate.";
+      description = "Synthetic RGB scene capture rate.";
     };
 
     staleAfterSeconds = lib.mkOption {
@@ -57,7 +57,7 @@ in
     networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [ cfg.port ];
 
     systemd.services.sensing-demo = {
-      description = "Ghaf synthetic camera observation demo";
+      description = "Ghaf synthetic RGB producer and semantic receiver demo";
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
       serviceConfig = {

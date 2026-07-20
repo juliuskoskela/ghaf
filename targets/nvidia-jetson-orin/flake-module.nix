@@ -89,8 +89,9 @@ let
       };
     })
 
-    # Headless reference target: sensing-vm owns the GPU and publishes
-    # synthetic camera observations while camera passthrough is being enabled.
+    # Headless reference target: sensing-vm owns the GPU, produces synthetic
+    # RGB scenes, and publishes derived semantics while camera passthrough is
+    # being enabled.
     (ghaf-configuration {
       name = "nvidia-jetson-orin-agx-sensing-demo";
       inherit system;
