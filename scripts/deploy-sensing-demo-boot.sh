@@ -22,6 +22,7 @@ Upload and stage the sensing-demo closure without hot-switching the Jetson host.
 Usage:
   scripts/deploy-sensing-demo-boot.sh [options]
   scripts/deploy-sensing-demo-boot.sh --check [options]
+  scripts/deploy-sensing-demo-boot.sh --uart-reboot [options]
   scripts/deploy-sensing-demo-boot.sh --promote [options]
 
 Options:
@@ -29,10 +30,11 @@ Options:
   --host-ip ADDRESS     Ghaf host address behind net-vm (default: 192.168.100.2)
   --identity PATH       SSH private key (default: ~/.ssh/ghaf-vega)
   --flake TARGET        NixOS flake target
-  --reboot              Reboot through the debug UART and monitor with minicom
+  --reboot              Stage, reboot through UART, and monitor until login
+  --uart-reboot         Reboot an already-staged update through UART
   --uart-device PATH    Debug UART device (default: /dev/ttyACM0)
   --uart-user USER      Debug-console user (default: ghaf)
-  --uart-log PATH       Minicom capture log (default: a timestamped /tmp file)
+  --uart-log PATH       UART capture log (default: a timestamped /tmp file)
   --check               Validate SSH and the current boot entry without changes
   --promote             Make a successfully booted staged entry persistent
   -h, --help            Show this help
@@ -42,8 +44,8 @@ board and the following boot returns to the previous default entry. Run
 --promote only after the new generation and sensing demo have been verified.
 
 The UART password is read from GHAF_UART_PASSWORD and defaults to the debug
-image password "ghaf". Minicom remains open after issuing the reboot; exit it
-with Ctrl-A X after the new login prompt appears.
+image password "ghaf". UART output is printed directly and the command exits
+when the new ghaf-host login prompt appears.
 EOF
 }
 
@@ -66,6 +68,11 @@ while (($# > 0)); do
     shift 2
     ;;
   --reboot)
+    reboot_after_stage=true
+    shift
+    ;;
+  --uart-reboot)
+    action="uart-reboot"
     reboot_after_stage=true
     shift
     ;;
@@ -114,7 +121,7 @@ for command_name in nixos-rebuild ssh ssh-keygen; do
 done
 
 if [[ $reboot_after_stage == true ]]; then
-  for command_name in minicom stty; do
+  for command_name in runscript stty tee; do
     if ! command -v "$command_name" >/dev/null; then
       printf 'Required command is unavailable: %s\n' "$command_name" >&2
       exit 1
@@ -131,6 +138,107 @@ deploy_tmpdir=$(mktemp -d)
 trap 'rm -rf -- "$deploy_tmpdir"' EXIT
 known_hosts_file="$deploy_tmpdir/known_hosts"
 ssh_config_file="$deploy_tmpdir/ssh_config"
+
+reboot_via_uart() {
+  if [[ -z $uart_log ]]; then
+    uart_log="/tmp/ghaf-jetson-reboot-$(date -u +%Y%m%dT%H%M%SZ).log"
+  fi
+  mkdir -p -- "$(dirname -- "$uart_log")"
+  uart_script="$deploy_tmpdir/reboot.runscript"
+  cat >"$uart_script" <<'UART_SCRIPT'
+verbose on
+timeout 360
+
+send ""
+sleep 1
+send ""
+sleep 1
+send ""
+expect {
+  "login:" goto login
+  "$ " goto user_shell
+  "# " goto root_shell
+  timeout 20 goto failed
+}
+
+login:
+send "$(GHAF_UART_LOGIN)"
+expect {
+  "Password:" send "$(GHAF_UART_PASS)"
+  timeout 15 goto failed
+}
+expect {
+  "$ " goto user_shell
+  "# " goto root_shell
+  "Login incorrect" goto failed
+  timeout 15 goto failed
+}
+
+user_shell:
+send "sudo -S -p UART-SUDO-PASSWORD: systemctl reboot"
+expect {
+  "UART-SUDO-PASSWORD:" goto sudo_password
+  "Rebooting" goto monitor
+  timeout 5 goto monitor
+}
+
+sudo_password:
+send "$(GHAF_UART_PASS)"
+sleep 2
+goto monitor
+
+root_shell:
+send "systemctl reboot"
+sleep 2
+goto monitor
+
+monitor:
+print "Reboot requested; monitoring UART until the new login prompt."
+expect {
+  "ghaf-host login:" goto booted
+  timeout 300 goto boot_timeout
+}
+
+booted:
+print "New ghaf-host login prompt detected; UART monitor complete."
+exit 0
+
+boot_timeout:
+print "Timed out waiting for the new ghaf-host login prompt."
+exit 3
+
+failed:
+print "UART automation could not reach a shell; no reboot was requested."
+exit 2
+UART_SCRIPT
+
+  export GHAF_UART_LOGIN="$uart_user"
+  export GHAF_UART_PASS="$uart_password"
+  stty \
+    --file "$uart_device" \
+    raw \
+    -echo \
+    115200 \
+    cs8 \
+    -cstopb \
+    -parenb \
+    -crtscts \
+    -ixon \
+    -ixoff
+
+  printf 'UART: %s at 115200 8N1, no flow control\n' "$uart_device"
+  printf 'Capture log: %s\n' "$uart_log"
+  printf 'The monitor exits automatically at the new ghaf-host login prompt.\n\n'
+
+  # runscript is minicom's non-interactive script engine. Its verbose stream is
+  # stderr; tee keeps that stream visible while recording it without a pager.
+  # Reading and writing the same character device is intentional full-duplex I/O.
+  # shellcheck disable=SC2094
+  runscript "$uart_script" \
+    <"$uart_device" \
+    >"$uart_device" \
+    2> >(tee -a -- "$uart_log" >&2)
+}
 
 if ! ssh-keygen -F "$target_ip" >"$known_hosts_file"; then
   printf 'No trusted SSH host key exists for net-vm at %s.\n' "$target_ip" >&2
@@ -179,6 +287,26 @@ EOF
 
 ssh_host=(ssh -F "$ssh_config_file" ghaf-host-stage)
 "${ssh_host[@]}" true
+
+if [[ $action == "uart-reboot" ]]; then
+  "${ssh_host[@]}" bash -s <<'REMOTE_REBOOT_CHECK'
+set -euo pipefail
+
+entry=/boot/loader/entries/ghaf-staged.conf
+if [[ ! -f "$entry" ]]; then
+  printf 'No staged loader entry exists: %s\n' "$entry" >&2
+  exit 1
+fi
+boot_status=$(bootctl --esp-path=/boot status --no-pager)
+if [[ "$boot_status" != *"OneShot Entry: ghaf-staged.conf"* ]]; then
+  printf 'ghaf-staged.conf is not selected as the one-shot entry.\n' >&2
+  exit 1
+fi
+printf 'Verified staged one-shot entry; proceeding with UART reboot.\n'
+REMOTE_REBOOT_CHECK
+  reboot_via_uart
+  exit 0
+fi
 
 if [[ $action == "check" ]]; then
   "${ssh_host[@]}" bash -s <<'REMOTE_CHECK'
@@ -355,90 +483,7 @@ printf '\nUpload and one-shot boot staging completed successfully.\n'
 printf 'If the next boot fails, reset the board once more to return to the old default.\n'
 
 if [[ $reboot_after_stage == true ]]; then
-  if [[ -z $uart_log ]]; then
-    uart_log="/tmp/ghaf-jetson-reboot-$(date -u +%Y%m%dT%H%M%SZ).log"
-  fi
-  mkdir -p -- "$(dirname -- "$uart_log")"
-  minicom_script="$deploy_tmpdir/reboot.runscript"
-  cat >"$minicom_script" <<'MINICOM_SCRIPT'
-verbose on
-timeout 120
-
-send ""
-sleep 1
-send ""
-sleep 1
-send ""
-expect {
-  "login:" goto login
-  "$ " goto user_shell
-  "# " goto root_shell
-  timeout 20 goto failed
-}
-
-login:
-send "$(GHAF_UART_LOGIN)"
-expect {
-  "Password:" send "$(GHAF_UART_PASS)"
-  timeout 15 goto failed
-}
-expect {
-  "$ " goto user_shell
-  "# " goto root_shell
-  "Login incorrect" goto failed
-  timeout 15 goto failed
-}
-
-user_shell:
-send "sudo -S -p UART-SUDO-PASSWORD: systemctl reboot"
-expect {
-  "UART-SUDO-PASSWORD:" goto sudo_password
-  "Rebooting" goto done
-  timeout 5 goto done
-}
-
-sudo_password:
-send "$(GHAF_UART_PASS)"
-sleep 2
-goto done
-
-root_shell:
-send "systemctl reboot"
-sleep 2
-goto done
-
-failed:
-print "UART automation could not reach a shell; reboot manually in minicom."
-exit 2
-
-done:
-print "Reboot requested. Minicom will remain attached for boot monitoring."
-exit 0
-MINICOM_SCRIPT
-
-  export GHAF_UART_LOGIN="$uart_user"
-  export GHAF_UART_PASS="$uart_password"
-  stty \
-    --file "$uart_device" \
-    raw \
-    -echo \
-    115200 \
-    cs8 \
-    -cstopb \
-    -parenb \
-    -crtscts \
-    -ixon \
-    -ixoff
-  printf 'Opening %s at 115200 baud; capture log: %s\n' "$uart_device" "$uart_log"
-  printf 'Minicom will issue the reboot and remain attached. Exit with Ctrl-A X.\n'
-  minicom \
-    --device "$uart_device" \
-    --baudrate 115200 \
-    --8bit \
-    --wrap \
-    --noinit \
-    --capturefile "$uart_log" \
-    --script "$minicom_script"
+  reboot_via_uart
 else
   printf 'Reboot was not requested. Re-run with --reboot when ready.\n'
 fi

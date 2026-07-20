@@ -158,7 +158,8 @@ For development updates, the guarded helper builds and uploads the latest local
 closure with `nixos-rebuild boot`, preserves the working kernel, initrd, and DTB
 directives, and creates a one-shot loader entry whose only change is the new
 system `init=` path. With `--reboot`, it logs into the host through the debug
-UART, requests the reboot, and leaves minicom attached to monitor the next boot:
+UART, requests the reboot, and prints the UART stream until the next host login
+prompt:
 
 ```bash
 scripts/deploy-sensing-demo-boot.sh --check
@@ -176,8 +177,15 @@ GHAF_UART_PASSWORD='<password>' \
     --reboot
 ```
 
-Exit minicom with <kbd>Ctrl</kbd>+<kbd>A</kbd>, then <kbd>X</kbd>, after the new
-login prompt appears.
+The UART monitor is non-interactive, uses minicom's `runscript` engine, and
+exits automatically when it sees the new `ghaf-host login:` prompt. If the
+closure has already been staged, skip the build and upload steps with:
+
+```bash
+scripts/deploy-sensing-demo-boot.sh \
+  --uart-log .idea/sensing-demo-reboot.log \
+  --uart-reboot
+```
 
 If the staged boot fails, reset the board again to use the unchanged default
 entry. After validating the new generation, make it persistent explicitly:
