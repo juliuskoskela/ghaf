@@ -110,6 +110,9 @@ let
       vmConfig.sysvms.sensingvm = {
         mem = 6000;
         vcpu = 4;
+        extraModules = [
+          { ghaf.sensing.demo.rawFrameExport.enable = true; }
+        ];
       };
     })
 

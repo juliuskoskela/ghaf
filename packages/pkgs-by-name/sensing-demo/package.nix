@@ -8,7 +8,7 @@
 }:
 stdenvNoCC.mkDerivation (_finalAttrs: {
   pname = "sensing-demo";
-  version = "0.2.0";
+  version = "0.3.0";
 
   src = ./.;
 
@@ -33,7 +33,7 @@ stdenvNoCC.mkDerivation (_finalAttrs: {
   '';
 
   meta = {
-    description = "Synthetic RGB producer and semantic receiver for the Ghaf sensing VM demo";
+    description = "Animated RGB producer and semantic receiver for the Ghaf sensing VM demo";
     license = lib.licenses.asl20;
     mainProgram = "sensing-demo";
     platforms = lib.platforms.linux;

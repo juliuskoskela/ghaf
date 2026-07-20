@@ -91,11 +91,12 @@ that those services must preserve.
 ### Initial Demo
 
 The first demo uses a synthetic RGB producer inside the sensing VM. It renders
-real pixel buffers for simple traffic scenes. A separate reference processor
-derives person, vehicle, and obstacle semantics from those pixels without
-reading producer ground truth. This proves the internal processing and service
-boundaries without making camera passthrough a prerequisite. It does not
-validate the Jetson camera pipeline or its device isolation.
+real pixel buffers for animated wildlife, farm, road, and warehouse scenes. A
+separate reference processor derives animal, person, vehicle, and object
+semantics from those pixels without reading producer ground truth. This proves
+the internal processing and service boundaries without making camera
+passthrough a prerequisite. It does not validate the Jetson camera pipeline or
+its device isolation.
 
 The demo provides a small, versioned observation service with these
 properties:
@@ -104,8 +105,9 @@ properties:
 - A latest-observation response contains a sequence number and capture time
 - Synthetic detections use the same envelope intended for a real camera source
 - A demo response compares producer intent with independently derived semantics
-- A visual demo reconstructs both views from metadata without exporting pixels
-- No endpoint returns raw frames or direct accelerator access
+- Raw frames remain unavailable by default
+- The dedicated development target explicitly enables a sequence-addressed PNG
+  feed so an operator can see the generated frames with synchronized overlays
 - A missing or failed source makes the service unhealthy instead of publishing stale data as current
 
 The demo protocol is not a production interface. Authentication, transport
@@ -113,6 +115,15 @@ security, schema governance, and inter-VM policy need follow-up decisions before
 applications depend on it. The reference processor uses deterministic color
 segmentation and explicitly reports that it does not use the accelerator. A
 future TensorRT or DeepStream processor can replace it behind the same boundary.
+The procedural producer likewise reports `uses_ai: false`; prompt text describes
+its configured scene rather than claiming generative-AI execution.
+
+Raw-frame visualization is an explicit exception to the normal sensing
+boundary. The `ghaf.sensing.demo.rawFrameExport.enable` option defaults to
+`false` and is enabled only by the dedicated sensing-demo debug target. The
+frame API is unauthenticated prototype functionality and must not be enabled in
+a production image. Observation responses remain free of raw pixels in either
+mode.
 
 The reference image is exposed as the
 `nvidia-jetson-orin-agx-sensing-demo-debug-from-x86_64` flake package. It starts
@@ -125,21 +136,21 @@ The reference image was flashed to a Jetson AGX Orin and validated on hardware
 on 2026-07-20. This evidence covers the synthetic-source milestone, not camera
 passthrough or a production perception interface.
 
-That run covered the original observation generator. The pixel-based producer
-and receiver described above have passed package and complete target builds,
-but require the same on-device checks after the upgraded image is flashed.
+The pixel-based producer and receiver were subsequently flashed and validated
+on the same device. The richer multi-scene raw-frame dashboard described above
+requires a new image and is not included in this recorded evidence.
 
 | Check | Evidence | Result |
 | --- | --- | --- |
 | VM and network wiring | `net-vm` received a LAN address through its passed-through Ethernet controller and reached `sensing-vm` at `192.168.100.3:8080`. | Pass |
 | Service lifecycle | `sensing-demo.service` remained active with no failures or restarts during validation. | Pass |
-| Health contract | `GET /healthz` returned schema `ghaf.sensing.health.v1`, source mode `synthetic`, accelerator `available`, and overall status `ready`. | Pass |
+| Health contract | `GET /healthz` returned schema `ghaf.sensing.health.v1`, source mode `synthetic-rgb`, accelerator `available`, and overall status `ready`. | Pass |
 | Observation contract | `GET /v1/observations/latest` returned schema `ghaf.sensing.observation.v1`, capture time, detection data, and increasing sequence numbers. | Pass |
 | GPU availability and compute | GPU device nodes were present in `sensing-vm`. The CUDA smoke test identified compute capability `sm_87` and completed with `GPU_LOAD_OK`. | Pass |
-| Raw-data boundary | Observation and health responses reported `raw_sensor_data_exported: false`; `GET /v1/frames/latest` returned HTTP 404. | Pass |
+| Raw-data boundary | Observation and health responses reported `raw_sensor_data_exported: false`; the raw-frame endpoint returned HTTP 404. | Pass |
 | Inter-VM consumption | Requests issued from `net-vm` to both sensing endpoints returned current data successfully. | Pass |
 
-The test used the synthetic source at two observations per second. It therefore
+The validated image used the synthetic RGB source. It therefore
 demonstrates GPU passthrough, guest-local sensing execution, typed output, and
 the `net-vm` to `sensing-vm` service path. It does not demonstrate camera
 ownership, camera capture, a separate ROS or workload VM, authentication,

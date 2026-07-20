@@ -29,9 +29,13 @@ in
 
     framesPerSecond = lib.mkOption {
       type = lib.types.ints.positive;
-      default = 2;
+      default = 5;
       description = "Synthetic RGB scene capture rate.";
     };
+
+    rawFrameExport.enable = lib.mkEnableOption ''
+      the debug-only raw PNG frame endpoint and live dashboard
+    '';
 
     staleAfterSeconds = lib.mkOption {
       type = lib.types.ints.positive;
@@ -61,14 +65,17 @@ in
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
       serviceConfig = {
-        ExecStart = lib.concatStringsSep " " [
-          "${lib.getExe pkgs.sensing-demo}"
-          "--bind ${lib.escapeShellArg cfg.listenAddress}"
-          "--port ${toString cfg.port}"
-          "--frames-per-second ${toString cfg.framesPerSecond}"
-          "--stale-after-seconds ${toString cfg.staleAfterSeconds}"
-          "--accelerator-device ${lib.escapeShellArg cfg.acceleratorDevice}"
-        ];
+        ExecStart = lib.concatStringsSep " " (
+          [
+            "${lib.getExe pkgs.sensing-demo}"
+            "--bind ${lib.escapeShellArg cfg.listenAddress}"
+            "--port ${toString cfg.port}"
+            "--frames-per-second ${toString cfg.framesPerSecond}"
+            "--stale-after-seconds ${toString cfg.staleAfterSeconds}"
+            "--accelerator-device ${lib.escapeShellArg cfg.acceleratorDevice}"
+          ]
+          ++ lib.optional cfg.rawFrameExport.enable "--raw-frame-export"
+        );
         Restart = "on-failure";
         RestartSec = 2;
         DynamicUser = true;

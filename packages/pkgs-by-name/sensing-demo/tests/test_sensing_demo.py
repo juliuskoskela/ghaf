@@ -22,6 +22,7 @@ from sensing_demo import (  # noqa: E402
     ObservationState,
     Snapshot,
     detect_semantics,
+    encode_png,
     handler_factory,
     health_document,
     process_frame,
@@ -38,10 +39,23 @@ class SensingDemoTest(unittest.TestCase):
         self.thread.start()
         self.base_url = f"http://127.0.0.1:{self.server.server_port}"
 
+        raw_handler = handler_factory(
+            self.state, 5, "/device/that/does/not/exist", raw_frame_export=True
+        )
+        self.raw_server = ThreadingHTTPServer(("127.0.0.1", 0), raw_handler)
+        self.raw_thread = threading.Thread(
+            target=self.raw_server.serve_forever, daemon=True
+        )
+        self.raw_thread.start()
+        self.raw_base_url = f"http://127.0.0.1:{self.raw_server.server_port}"
+
     def tearDown(self) -> None:
         self.server.shutdown()
         self.server.server_close()
         self.thread.join()
+        self.raw_server.shutdown()
+        self.raw_server.server_close()
+        self.raw_thread.join()
 
     def get_json(self, path: str) -> tuple[int, dict]:
         try:
@@ -66,7 +80,7 @@ class SensingDemoTest(unittest.TestCase):
 
         self.assertEqual(
             [detection["class_id"] for detection in detections],
-            ["person", "vehicle", "obstacle"],
+            ["deer", "fox", "bird"],
         )
         self.assertEqual(
             [detection["bounding_box_pixels"] for detection in detections],
@@ -90,13 +104,15 @@ class SensingDemoTest(unittest.TestCase):
         )
         self.assertEqual(
             capture["comparison"]["produced_labels"],
-            ["person", "vehicle", "obstacle"],
+            ["deer", "fox", "bird"],
         )
         self.assertTrue(capture["comparison"]["semantic_labels_match"])
         self.assertTrue(capture["comparison"]["bounding_boxes_match"])
         self.assertTrue(capture["comparison"]["all_detections_match_ground_truth"])
         self.assertFalse(capture["raw_sensor_data_exported"])
         self.assertNotIn("pixels", capture)
+        self.assertEqual(capture["producer"]["scene"]["id"], "wildlife")
+        self.assertFalse(capture["producer"]["generator"]["uses_ai"])
 
     def test_observation_contract_does_not_export_raw_data(self) -> None:
         capture = process_frame(produce_frame(7, "2026-07-20T12:00:00Z"))
@@ -150,15 +166,55 @@ class SensingDemoTest(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertEqual(document, {"error": "observation_unavailable"})
 
-    def test_raw_frame_endpoint_is_not_present(self) -> None:
-        status, document = self.get_json("/v1/frames/latest")
+    def test_raw_frame_endpoint_is_disabled_by_default(self) -> None:
+        frame = produce_frame(7)
+        self.state.publish(process_frame(frame), encode_png(frame))
+        status, document = self.get_json("/v1/frames/latest.png")
 
         self.assertEqual(status, 404)
         self.assertEqual(document, {"error": "not_found"})
 
+    def test_debug_raw_frame_endpoint_returns_synchronized_png(self) -> None:
+        frame = produce_frame(7)
+        self.state.publish(
+            process_frame(frame, raw_frame_export=True), encode_png(frame)
+        )
+
+        with urlopen(f"{self.raw_base_url}/v1/frames/7.png", timeout=2) as response:
+            payload = response.read()
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.headers["Content-Type"], "image/png")
+        self.assertEqual(payload[:8], b"\x89PNG\r\n\x1a\n")
+
+    def test_scene_generator_rotates_semantic_domains(self) -> None:
+        scenes = [produce_frame(sequence).scene for sequence in (0, 40, 80, 120)]
+
+        self.assertEqual(
+            [scene.id for scene in scenes],
+            ["wildlife", "farm", "road", "warehouse"],
+        )
+        self.assertEqual(
+            [[item.semantic_label for item in scene.objects] for scene in scenes],
+            [
+                ["deer", "fox", "bird"],
+                ["cow", "sheep", "dog"],
+                ["person", "vehicle", "obstacle"],
+                ["person", "cat", "forklift", "parcel"],
+            ],
+        )
+
+    def test_every_scene_is_detected_from_its_rendered_pixels(self) -> None:
+        for sequence in (0, 20, 40, 60, 80, 100, 120, 140):
+            with self.subTest(sequence=sequence):
+                capture = process_frame(produce_frame(sequence))
+                self.assertTrue(
+                    capture["comparison"]["all_detections_match_ground_truth"]
+                )
+
     def test_stale_source_is_unhealthy(self) -> None:
         document, source_ready = health_document(
-            Snapshot(process_frame(produce_frame(0)), age_seconds=6),
+            Snapshot(process_frame(produce_frame(0)), None, age_seconds=6),
             stale_after_seconds=5,
             accelerator_device="/device/that/does/not/exist",
         )

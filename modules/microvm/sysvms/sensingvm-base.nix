@@ -8,6 +8,6 @@
   imports = [ ./jetson-gpu-base.nix ];
 
   # Synthetic RGB frames prove the producer/processor boundary without camera
-  # passthrough. Replace the source when CSI/USB camera ownership is available.
+  # passthrough. Raw-frame export remains opt-in for explicit debug targets.
   ghaf.sensing.demo.enable = lib.mkDefault true;
 }

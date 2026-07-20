@@ -180,10 +180,10 @@ nix build .#nvidia-jetson-orin-agx-sensing-demo-debug-from-x86_64
 ```
 
 The sensing VM runs a minimal producer/receiver service on TCP port `8080`.
-Before camera passthrough is available, a producer renders deterministic RGB
-traffic scenes containing a person, vehicle, and obstacle. A separate receiver
-derives semantic detections from the generated pixels. It does not read the
-producer's scene metadata and the service does not provide a raw-frame endpoint.
+Before camera passthrough is available, a procedural producer renders animated
+RGB wildlife, farm, road, and warehouse scenes. A separate receiver derives
+semantic detections from the generated pixels. It does not read the producer's
+scene metadata.
 
 From a client allowed to reach `sensing-vm` (`192.168.100.3`), query the service:
 
@@ -206,27 +206,36 @@ reports `uses_accelerator: false`. GPU availability and the separate
 The receiver boundary can later host a TensorRT or DeepStream implementation
 without changing the observation endpoint.
 
-The service also provides a small visual comparison at `/demo`. From a client
-that can SSH to `net-vm`, forward the internal endpoint and open
+The dedicated debug target enables sequence-addressed PNG frames and provides a
+live comparison at `/demo`. From a client that can SSH to `net-vm`, forward the
+internal endpoint and open
 `http://localhost:8080/demo`:
 
 ```bash
 ssh -L 8080:192.168.100.3:8080 ghaf@<net-vm-lan-address>
 ```
 
-The page reconstructs the synthetic scene and receiver overlays from metadata;
-raw RGB pixels remain inside `sensing-vm`.
+The browser receives the generated PNG frames over Ethernet and draws detection
+overlays from matching sequence-numbered metadata. The dashboard rotates among
+multiple semantic domains and reports scene prompt text, generation time,
+detection time, frame number, and match status.
 
-The service returns `404` for raw-frame requests:
+Raw-frame export is controlled by
+`ghaf.sensing.demo.rawFrameExport.enable`, defaults to `false`, and must remain a
+debug-only exception. When disabled, the service returns `404` for frame
+requests. When enabled by this target, a specific frame can be fetched with:
 
 ```bash
-curl --fail-with-body http://192.168.100.3:8080/v1/frames/latest
+curl --output frame.png http://192.168.100.3:8080/v1/frames/latest.png
 ```
 
 This demo validates a real pixel-processing path and the service boundary. Its
-color segmentation is deterministic test logic, not an AI model. It does not
-validate camera passthrough or a production perception interface. For the
-architectural decision, see [Jetson Sensing Virtual Machine](/ghaf/overview/arch/adr/jetson-sensing-vm/).
+procedural generator and color segmentation are deterministic test logic, not
+AI models. Both identify themselves truthfully in health and demo responses.
+TensorRT generation and inference remain follow-up backends. The frame endpoint
+is unauthenticated prototype functionality and does not validate production
+policy. For the architectural decision, see
+[Jetson Sensing Virtual Machine](/ghaf/overview/arch/adr/jetson-sensing-vm/).
 
 <Aside>
   Use `ssh gpu-vm 'bash -c "..."'`; a **login** shell (`bash -lc`) hangs in the
