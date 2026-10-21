@@ -469,6 +469,9 @@ let
     ++ (map (t: generate-luks (generate-nodemoapps t)) luksable-target-configs)
     ++ (map (t: generate-luks-uki (generate-nodemoapps t)) luksable-target-configs);
   crossTargets = map generate-cross-from-x86_64 targets;
+  nxRcmDiagnosticTarget = lib.findFirst (
+    t: t.name == "nvidia-jetson-orin-nx-debug-from-x86_64"
+  ) (throw "missing Orin NX cross target") crossTargets;
 
   flashTarget =
     t: qspiOnly:
@@ -608,7 +611,47 @@ in
           map (
             t: lib.nameValuePair "${t.name}-ghafImage" t.hostConfiguration.config.system.build.ghafImage
           ) verityCrossTargets
-        );
+        )
+        // {
+          nvidia-jetson-orin-nx-debug-from-x86_64-rcm-nvme-diagnostic =
+            lazyPackage "nvidia-jetson-orin-nx-debug-from-x86_64-rcm-nvme-diagnostic"
+              (
+                import ./nx-rcm-nvme-diagnostic.nix {
+                  inherit lib;
+                  inherit (nxRcmDiagnosticTarget.hostConfiguration) config pkgs;
+                }
+              );
+          nvidia-jetson-orin-nx-debug-from-x86_64-rcm-nvme-export =
+            lazyPackage "nvidia-jetson-orin-nx-debug-from-x86_64-rcm-nvme-export"
+              (
+                import ./nx-rcm-nvme-diagnostic.nix {
+                  inherit lib;
+                  inherit (nxRcmDiagnosticTarget.hostConfiguration) config pkgs;
+                  exportNvme = true;
+                }
+              );
+          nvidia-jetson-orin-nx-debug-from-x86_64-rcm-nvme-write =
+            lazyPackage "nvidia-jetson-orin-nx-debug-from-x86_64-rcm-nvme-write"
+              (
+                let
+                  buildPkgs = nxRcmDiagnosticTarget.hostConfiguration.pkgs.buildPackages;
+                in
+                buildPkgs.writeShellApplication {
+                  name = "nx-rcm-nvme-write";
+                  runtimeInputs = with buildPkgs; [
+                    python3
+                    coreutils
+                    gptfdisk
+                    parted
+                    util-linux
+                    systemd
+                  ];
+                  text = ''
+                    exec ${buildPkgs.python3}/bin/python3 ${./nx-rcm-nvme-write.py} "$@"
+                  '';
+                }
+              );
+        };
     };
   };
 }
