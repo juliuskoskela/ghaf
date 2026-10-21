@@ -1,0 +1,60 @@
+SPDX-FileCopyrightText: 2026 TII (SSRC) and the Ghaf contributors
+SPDX-License-Identifier: Apache-2.0
+
+Subject: [PATCH] Identify virtio queues on descriptor rejection
+
+Log the activated device and queue ring addresses so a rejected
+split descriptor can be attributed to the exact virtio queue.
+
+--- a/devices/src/virtio/virtio_pci_device.rs
++++ b/devices/src/virtio/virtio_pci_device.rs
+@@ -15,2 +15,3 @@
+ use base::trace;
++use base::warn;
+ use base::AsRawDescriptor;
+@@ -645,2 +646,3 @@
+         // Use ready queues and their events.
++        let label = self.debug_label();
+         let queues = self
+@@ -652,2 +654,10 @@
+             .map(|((queue_index, queue), evt)| {
++                warn!(
++                    "{} queue={} desc_table={:#x} avail_ring={:#x} used_ring={:#x}",
++                    label,
++                    queue_index,
++                    queue.desc_table().offset(),
++                    queue.avail_ring().offset(),
++                    queue.used_ring().offset(),
++                );
+                 if !evt.ioevent_registered {
+--- a/devices/src/virtio/virtio_mmio_device.rs
++++ b/devices/src/virtio/virtio_mmio_device.rs
+@@ -145,2 +145,3 @@
+         // Use ready queues and their events.
++        let label = self.debug_label();
+         let queues = self
+@@ -152,2 +153,10 @@
+             .map(|(queue_index, (queue, evt))| {
++                warn!(
++                    "{} queue={} desc_table={:#x} avail_ring={:#x} used_ring={:#x}",
++                    label,
++                    queue_index,
++                    queue.desc_table().offset(),
++                    queue.avail_ring().offset(),
++                    queue.used_ring().offset(),
++                );
+                 let queue_evt = evt.try_clone().context("failed to clone queue_evt")?;
+--- a/devices/src/virtio/queue/split_queue.rs
++++ b/devices/src/virtio/queue/split_queue.rs
+@@ -341,3 +341,10 @@
+             .map_err(|e| {
+-                error!("{:#}", e);
++                error!(
++                    "split queue desc_table={:#x} avail_ring={:#x} used_ring={:#x} head={}: {:#}",
++                    self.desc_table.offset(),
++                    self.avail_ring.offset(),
++                    self.used_ring.offset(),
++                    descriptor_index,
++                    e,
++                );
+                 e
