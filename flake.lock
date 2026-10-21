@@ -547,17 +547,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1792083642,
-        "narHash": "sha256-IOL7N/WrIIJ69AHZaclCNl/SEZY5d8t+eTEcBvgThZc=",
-        "owner": "tiiuae",
+        "lastModified": 1792585169,
+        "narHash": "sha256-GcBpExFKPNSleUWfq0Kui9IyyL/6zm2XFImquTxuyps=",
+        "owner": "juliuskoskela",
         "repo": "jetpack-nixos",
-        "rev": "bf358ac8688c8b444a8fc5bd4a15454ecd2e5b4b",
+        "rev": "907887068e78c85208cd39b6606ce4c997373984",
         "type": "github"
       },
       "original": {
-        "owner": "tiiuae",
-        "ref": "feat/orin-proxy-lifecycle",
+        "owner": "juliuskoskela",
         "repo": "jetpack-nixos",
+        "rev": "907887068e78c85208cd39b6606ce4c997373984",
         "type": "github"
       }
     },
