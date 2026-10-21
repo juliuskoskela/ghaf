@@ -167,7 +167,7 @@
     jetpack-nixos = {
       #url = "github:anduril/jetpack-nixos";
       # TODO: restore october-rebase after https://github.com/tiiuae/jetpack-nixos/pull/22 merges.
-      url = "github:tiiuae/jetpack-nixos/feat/orin-proxy-lifecycle";
+      url = "github:juliuskoskela/jetpack-nixos?rev=907887068e78c85208cd39b6606ce4c997373984";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
