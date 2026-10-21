@@ -11,14 +11,14 @@ import struct
 import subprocess
 from pathlib import Path
 
-IMAGE_SHA256 = "800d77f0672b5d1906523bd3fb905aed6b5f2161b9c5f7d1955c5805bb4b8dad"
-IMAGE_BYTES = 13_987_753_984
+IMAGE_SHA256 = "29d096112b34b136aaf16829b8d3c73e140db91bef64db0e4f3e8e11de00a693"
+IMAGE_BYTES = 13_987_741_696
 DISK_BYTES = 500_107_862_016
 NVME_SERIAL = "S4EVNM0TA19050K"
 ESP_START = 16_384
 ESP_SECTORS = 524_288
 ROOT_START = 540_672
-ROOT_SECTORS = 26_779_160
+ROOT_SECTORS = 26_779_136
 SECTOR = 512
 CHUNK = 4 * 1024 * 1024
 
@@ -123,7 +123,7 @@ def copy_and_verify(image: Path, partition: Path, offset: int, length: int) -> N
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="nx-rcm-nvme-write",
-        description="Write the approved de0878e NX image through its recovery USB gadget",
+        description="Write the approved 1f48add NX image through its recovery USB gadget",
     )
     parser.add_argument("--image", required=True, type=Path)
     parser.add_argument("--device", required=True, type=Path)
