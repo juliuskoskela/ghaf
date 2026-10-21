@@ -29,6 +29,7 @@ let
           ./crosvm-pmem-ext2-low-address.patch
           ./crosvm-dce-defer-thread.patch
           ./crosvm-arm64-readonly-cache-maintenance.patch
+          ./crosvm-queue-diagnostic.patch
         ]
       );
       cargoDeps = prev.rustPlatform.fetchCargoVendor {
